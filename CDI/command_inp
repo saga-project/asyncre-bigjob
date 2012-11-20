@@ -1,0 +1,17 @@
+ENGINE = 'DATE'
+RE_TYPE = 'DATE'
+RE_SETUP = 'yes'
+ENGINE_INPUT_BASENAME = 'date'
+ENGINE_INPUT_EXTFILES =
+LAMBDAS = '0.04,0.07,0.1,0.25,0.35,0.45,0.55,0.65,0.71,0.78,0.85,1.0'
+BEDAM_TEMPERATURE = 300.0
+WALL_TIME=1200
+PPN=1
+COORDINATION_URL="redis://ILikeBigJob_wITH-REdIS@gw68.quarry.iu.teragrid.org:6379"
+RESOURCE_URL="pbs-ssh://egallicc@kraken-gsi.nics.teragrid.org"
+QUEUE="small"
+BJ_WORKING_DIR='/lustre/scratch/egallicc/BigJob_test/async_re/agent'
+TOTAL_CORES=12
+SPMD="single"
+SUBJOB_CORES=12
+VERBOSE="yes"
