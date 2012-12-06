@@ -20,7 +20,9 @@ Issues a command to launch /bin/date using PJ
         if self.keywords.get('VERBOSE') == "yes":
             print "Launching %s in directory %s cycle %d" % ("/bin/date",os.getcwd()+"/r"+str(replica),cycle)
         compute_unit=self.cds.submit_compute_unit(compute_unit_description)
-        self.cus[replica]=compute_unit
+
+        #self.cus[replica]=compute_unit
+        return compute_unit
 
 
 class date_async_re_job(pj_date_job,async_re_job):

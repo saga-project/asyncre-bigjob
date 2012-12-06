@@ -452,7 +452,7 @@ Calls in this case pilot-job version.
 Returns true if replica is in 'done' state
 """
        	#pilotjob: Get status of the compute unit
-	#pilotjob: Query the replica to see if it is in the done state 
+	#pilotjob: Query the replica to see if it is in the done state
         if self.cus[replica].get_state() == "Done":
             return True
         else:
