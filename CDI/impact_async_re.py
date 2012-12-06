@@ -34,7 +34,8 @@ Launches Impact sub-job using pilot-job
          if self.keywords.get('VERBOSE') == "yes":
             print "Launching %s %s in directory %s cycle %d" % (os.getcwd()+"/runimpact",input_file,os.getcwd()+"/r"+str(replica),cycle)
 
-         compute_unit=self.cds.submit_compute_unit(compute_unit_description)
+#         compute_unit=self.cds.submit_compute_unit(compute_unit_description)
+         compute_unit=self.pilotcompute.submit_compute_unit(compute_unit_description)
          return compute_unit
 
     def _getImpactData(self, file):
