@@ -2,12 +2,13 @@ import sys, time, random, math
 from pj_async_re import async_re_job
 from amber_async_re import pj_amber_job
 
+BOLTZMANN_CONSTANT = 1.3806*6.022/4148
 
 class amberus_async_re_job(pj_amber_job,async_re_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
-        #make sure BEDAM is wanted
+        #make sure AMBER umbrella sampling is wanted
         if self.keywords.get('RE_TYPE') != 'AMBERUS':
             self._exit("RE_TYPE is not AMBERUS")
         #AMBERUS runs with Amber
@@ -21,51 +22,52 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         #list of force constants
         if self.keywords.get('FORCE_CONSTANTS') is None:
             self._exit("FORCE_CONSTANTS needs to be specified")
-        self.kbias = self.keywords.get('FORCE_CONSTANTS').split(',')
+        kbiasline = self.keywords.get('FORCE_CONSTANTS')
+        if [kbiasline] == kbiasline.split(':'):
+            self.kbias = [[item] for item in kbiasline.split(',')]
+        else:
+            self.kbias = [item.split(',') for item in kbiasline.split(':')]
         self.nreplicas = len(self.kbias)
         #list of bias positions
         if self.keywords.get('BIAS_POSITIONS') is None:
             self._exit("BIAS_POSITIONS needs to be specified")
-        self.posbias = self.keywords.get('BIAS_POSITIONS').split(',')
+        posbiasline = self.keywords.get('BIAS_POSITIONS')
+        if [posbiasline] == posbiasline.split(':'):
+            self.posbias = [[item] for item in posbiasline.split(',')]
+        else:
+            self.posbias = [item.split(',') for item in posbiasline.split(':')] 
         if len(self.posbias) != self.nreplicas:
-            self._exit("Number of FORCE_CONSTANTS not equal to number of BIAS_POSITIONS")
+            msg = ('Number of FORCE_CONSTANTS not equal to number of'
+                   ' BIAS_POSITIONS')
+            self._exit(msg)
+
         #simulation temperature
         if self.keywords.get('TEMPERATURE') is None:
             self._exit("TEMPERATURE is a required parameter")
         temperature = float(self.keywords.get('TEMPERATURE'))
-        self.beta = 1./(0.0019872041*temperature)
-#        #build parameters for the lambda states
-#        self._buildBEDAMStates(lambdas)
-
-#    def _buildBEDAMStates(self,lambdas):
-#        self.stateparams = []
-#        for lambd in lambdas:
-#            st = {}
-#            st['lambda'] = lambd
-#            self.stateparams.append(st)
-#        return len(self.stateparams)
+        self.beta = 1./(BOLTZMANN_CONSTANT*temperature)
 
     def _buildInpFile(self, replica):
         """
-Builds input file for a BEDAM replica based on template input file
-BASENAME.inp for the specified replica at lambda=lambda[stateid] for the
-specified cycle.
-"""
+        Builds input file for a AMBER umbrella sampling replica based on a
+        template input file, BASENAME.inp, for the specified replica and cycle.
+        """
         basename = self.basename
         stateid = self.status[replica]['stateid_current']
         cycle = self.status[replica]['cycle_current']
 
         restraint_template = "%s.RST" % basename
         restraint_file = "r%d/%s_%d.RST" % (replica, basename, cycle)
-        rk = self.kbias[stateid]
-        r0 = self.posbias[stateid]
         # read template buffer
         tfile = open(restraint_template, "r")
         tbuffer = tfile.read()
         tfile.close()
         # make modifications
-        tbuffer = tbuffer.replace("@rk@",rk)
-        tbuffer = tbuffer.replace("@r0@",r0)
+        for i in range(len(self.kbias[:][0])):
+            rk = self.kbias[stateid][i]
+            r0 = self.posbias[stateid][i]
+            tbuffer = tbuffer.replace('@rk%d@'%i,rk)
+            tbuffer = tbuffer.replace('@r0%d@'%i,r0)
         # write out
         ofile = open(restraint_file, "w")
         ofile.write(tbuffer)
@@ -83,72 +85,75 @@ specified cycle.
         ofile = open(input_file, "w")
         ofile.write(tbuffer)
         ofile.close()
+      
+    @staticmethod
+    def bias_energy(bias_coords, force_constants, bias_positions, angle=None):
+        if angle == None: angle = [ True  for i in range(len(bias_coords)) ]
 
-        
-
-        #parse more input files here ...
-
-
-        # update the history status file
-#        ofile = open("r%d/state.history" % replica, "a")
-#        ofile.write("%d %d %s\n" % (cycle, stateid, lambd))
-#        ofile.close()
-        
+        dr2 = [ (float(r) - float(r0))**2 
+                for r,r0 in zip(bias_coords,bias_positions) ]
+        uBias = 0.
+        for i in range(len(dr2)):
+            if angle[i]:
+                uBias += float(force_constants[i])*(math.pi/180.)**2*dr2[i]
+            else:     
+                uBias += float(force_constants[i])*dr2[i]
+        return uBias
 
     def _doExchange_pair(self,repl_a,repl_b):
+        """Perform exchange of bias parameters.        
         """
-Performs exchange of lambdas for BEDAM replica exchange.        
-"""
         cycle_a = self.status[repl_a]['cycle_current']
         sid_a = self.status[repl_a]['stateid_current']
         rk_a = self.kbias[sid_a]
         r0_a = self.posbias[sid_a]
-        angle_a = self._extractLast_Angles(repl_a,cycle_a)
+        bias_coord_a = self._extractLastRCs(repl_a,cycle_a)
 
         cycle_b = self.status[repl_b]['cycle_current'] 
         sid_b = self.status[repl_b]['stateid_current']
         rk_b = self.kbias[sid_b]
         r0_b = self.posbias[sid_b]
-        angle_b = self._extractLast_Angles(repl_b,cycle_b)
+        bias_coord_b = self._extractLastRCs(repl_b,cycle_b)
 
-#        u_aa = self.bias_energy(angle_a, rk_a, r0_a)
-#        u_ab = self.bias_energy(angle_b, rk_a, r0_a)
-#        u_ba = self.bias_energy(angle_a, rk_b, r0_b)
-#        u_bb = self.bias_energy(angle_b, rk_b, r0_b)
-#        delta = (u_ab + u_ba) - (u_aa + u_bb)
-        delta = 100.0
+        u_aa = amberus_async_re_job.bias_energy(bias_coord_a,rk_a,r0_a)
+        u_ab = amberus_async_re_job.bias_energy(bias_coord_b,rk_a,r0_a)
+        u_ba = amberus_async_re_job.bias_energy(bias_coord_a,rk_b,r0_b)
+        u_bb = amberus_async_re_job.bias_energy(bias_coord_b,rk_b,r0_b)
+        delta = (u_ab + u_ba) - (u_aa + u_bb)
         
         if self.keywords.get('VERBOSE') == "yes":
-            print "Pair Info:"
-            print "replica = %d angle = %s  r0 = %s" % (repl_a, angle_a, r0_a)
-            print "replica = %d angle = %s  r0 = %s" % (repl_b, angle_b, r0_b)
+            print 'Pair Info:'
+            
+            print 'replica = %d'%repl_a
+            print ' bias coordinate : bias position'
+            for r,r0 in zip(bias_coord_a,r0_a): print ' %15s : %13s'%(r,r0)
+                
+            print 'replica = %d'%repl_b
+            print ' bias coordinate : bias position'
+            for r,r0 in zip(bias_coord_b,r0_b): print ' %15s : %13s'%(r,r0)
+
+            print "delta = %f kcal/mol"%delta
 
         csi = random.random()
-        if math.exp(-self.beta*delta) > csi:
-            if self.keywords.get('VERBOSE') == "yes":
-                print "Accepted %f %f" % (math.exp(-self.beta*delta),csi)
-                print (self.status[repl_a]['stateid_current'], self.status[repl_b]['stateid_current'])
+        P_ab = math.exp(-self.beta*delta)
+        if P_ab > csi:
             self.status[repl_a]['stateid_current'] = sid_b
             self.status[repl_b]['stateid_current'] = sid_a
+
             if self.keywords.get('VERBOSE') == "yes":
-                print (self.status[repl_a]['stateid_current'], self.status[repl_b]['stateid_current'])
+                print "Accepted %f %f" % (P_ab,csi)
+                print (self.status[repl_a]['stateid_current'], 
+                       self.status[repl_b]['stateid_current'])
         else:
             if self.keywords.get('VERBOSE') == "yes":
-                print "Rejected %f %f" % (math.exp(-self.beta*delta),csi)
+                print "Rejected %f %f" % (P_ab,csi)
 
-    def _extractLast_Angles(self,repl,cycle):
+    def _extractLastRCs(self,repl,cycle):
+        """Extracts the last set of reaction coordinates from NMRopt output
         """
-Extracts binding energy from Impact output
-"""
         trace_file = "r%s/%s_%d.TRACE" % (repl,self.basename,cycle)
-        datai = self._getAmberUSData(trace_file)
-        print datai
-        nf = len(datai[0])
-        nr = len(datai)
-        print datai[-1][1]
-        return datai[-1][1]
-
-
+        data = self._getAmberUSData(trace_file)
+        return data[-1][1:]
 
 if __name__ == '__main__':
 
