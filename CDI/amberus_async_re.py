@@ -28,6 +28,14 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         else:
             self.kbias = [item.split(',') for item in kbiasline.split(':')]
         self.nreplicas = len(self.kbias)
+        #conversion for angle force constants (AMBER uses kcal/mol-rad^2!)
+        nbias = len(self.kbias[0])
+        if self.keywords.get('BIAS_IS_ANGLE') is None:
+            self.bias_is_angle = [ False for n in range(nbias) ]
+        else:
+            self.bias_is_angle = self.keywords.get('BIAS_IS_ANGLE').split(',')
+            if len(self.bias_is_angle) != nbias:
+                self._exit("# of biases and BIAS_IS_ANGLE flags don't match")
         #list of bias positions
         if self.keywords.get('BIAS_POSITIONS') is None:
             self._exit("BIAS_POSITIONS needs to be specified")
@@ -87,14 +95,16 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         ofile.close()
       
     @staticmethod
-    def bias_energy(bias_coords, force_constants, bias_positions, angle=None):
-        if angle == None: angle = [ True  for i in range(len(bias_coords)) ]
+    def bias_energy(bias_coords, force_constants, bias_positions, isAngle=None):
+        """Calculate the (harmonic) bias energy of coordinates in a given state.
+        """
+        if isAngle == None: isAngle = [ True for i in range(len(bias_coords)) ]
 
         dr2 = [ (float(r) - float(r0))**2 
                 for r,r0 in zip(bias_coords,bias_positions) ]
         uBias = 0.
         for i in range(len(dr2)):
-            if angle[i]:
+            if isAngle[i]:
                 uBias += float(force_constants[i])*(math.pi/180.)**2*dr2[i]
             else:     
                 uBias += float(force_constants[i])*dr2[i]
@@ -115,10 +125,11 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         r0_b = self.posbias[sid_b]
         bias_coord_b = self._extractLastRCs(repl_b,cycle_b)
 
-        u_aa = amberus_async_re_job.bias_energy(bias_coord_a,rk_a,r0_a)
-        u_ab = amberus_async_re_job.bias_energy(bias_coord_b,rk_a,r0_a)
-        u_ba = amberus_async_re_job.bias_energy(bias_coord_a,rk_b,r0_b)
-        u_bb = amberus_async_re_job.bias_energy(bias_coord_b,rk_b,r0_b)
+        isAngle = self.bias_is_angle
+        u_aa = amberus_async_re_job.bias_energy(bias_coord_a,rk_a,r0_a,isAngle)
+        u_ab = amberus_async_re_job.bias_energy(bias_coord_b,rk_a,r0_a,isAngle)
+        u_ba = amberus_async_re_job.bias_energy(bias_coord_a,rk_b,r0_b,isAngle)
+        u_bb = amberus_async_re_job.bias_energy(bias_coord_b,rk_b,r0_b,isAngle)
         delta = (u_ab + u_ba) - (u_aa + u_bb)
         
         if self.keywords.get('VERBOSE') == "yes":

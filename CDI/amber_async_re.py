@@ -1,13 +1,19 @@
 import os, re, random, math
 from pj_async_re import async_re_job
 
-EXE = '/home/radakb/devel/git/Programs/Amber11/bin/sander'
-
 class pj_amber_job(async_re_job):
 
     def _launchReplica(self,replica,cycle):
         """Launches Amber sub-job using pilot-job
         """
+        if self.keywords.get('SPMD') == 'single':
+            output = os.popen('which sander','r').readlines()
+            exe = output[0].strip()
+        elif self.keywords.get('SPMD') == 'mpi':
+            np = self.keywords.get('SUBJOB_CORES')
+            output = os.popen('which sander.MPI','r').readlines()
+            exe = 'mpirun -np %s %s'%(np,output[0].strip())
+
         input_file = "%s_%d.inp" % (self.basename, cycle)
         out_file = "%s_%d.out" % (self.basename, cycle)
         prm_file = "%s.parm7" % self.basename
@@ -29,7 +35,7 @@ class pj_amber_job(async_re_job):
 
         #pilotjob: Compute Unit (i.e. Job) description
         compute_unit_description = {
-            "executable": EXE,
+            "executable": exe,
             "environment": [],
             "arguments": arguments,
             "total_cpu_count": int(self.keywords.get('SUBJOB_CORES')),
@@ -40,14 +46,14 @@ class pj_amber_job(async_re_job):
             }
 
         if self.keywords.get('VERBOSE') == "yes":
-            print ( "Launching %s %s in directory %s cycle %d" % 
-                    (EXE,input_file,os.getcwd()+"/r"+str(replica),cycle) )
+            print ( "Launching %s in directory %s (cycle %d)" % 
+                    (exe.split('/')[-1], os.getcwd()+"/r"+str(replica), cycle) )
 
         compute_unit=self.cds.submit_compute_unit(compute_unit_description)
         return compute_unit
 
     def _getAmberUSData(self, file):
-        """Reads the restraining angles from NMRopt output file
+        """Reads the bias coordinate values from NMRopt output file
         """
         if not os.path.exists(file):
             msg = 'File does not exist: %s' % file
