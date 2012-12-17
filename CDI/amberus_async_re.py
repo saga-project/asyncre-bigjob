@@ -98,7 +98,7 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
     def bias_energy(bias_coords, force_constants, bias_positions, isAngle=None):
         """Calculate the (harmonic) bias energy of coordinates in a given state.
         """
-        if isAngle == None: isAngle = [ True for i in range(len(bias_coords)) ]
+        if isAngle == None: isAngle = [ False for i in range(len(bias_coords)) ]
 
         dr2 = [ (float(r) - float(r0))**2 
                 for r,r0 in zip(bias_coords,bias_positions) ]

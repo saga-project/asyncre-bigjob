@@ -6,13 +6,18 @@ class pj_amber_job(async_re_job):
     def _launchReplica(self,replica,cycle):
         """Launches Amber sub-job using pilot-job
         """
-        if self.keywords.get('SPMD') == 'single':
-            output = os.popen('which sander','r').readlines()
-            exe = output[0].strip()
-        elif self.keywords.get('SPMD') == 'mpi':
-            np = self.keywords.get('SUBJOB_CORES')
-            output = os.popen('which sander.MPI','r').readlines()
-            exe = 'mpirun -np %s %s'%(np,output[0].strip())
+
+        if self.keywords.get('SPMD') is None:
+            spmd = 'single'
+        else:
+            spmd = self.keywords.get('SPMD')
+            if spmd == 'single':
+                exe = os.popen('which sander','r').readlines()[0].strip()
+            elif spmd == 'mpi':
+                exe = os.popen('which sander.MPI','r').readlines()[0].strip()
+
+        if self.keywords.get('PPN') is None: ppn = 1
+        else:                                ppn = int(self.keywords.get('PPN'))
 
         input_file = "%s_%d.inp" % (self.basename, cycle)
         out_file = "%s_%d.out" % (self.basename, cycle)
@@ -42,7 +47,8 @@ class pj_amber_job(async_re_job):
             "output": log_file,
             "error": err_file,   
             "working_directory":os.getcwd()+"/r"+str(replica),
-            "spmd_variation":self.keywords.get('SPMD')
+            "number_of_processes": ppn, 
+            "spmd_variation": spmd,
             }
 
         if self.keywords.get('VERBOSE') == "yes":
