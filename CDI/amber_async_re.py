@@ -55,7 +55,8 @@ class pj_amber_job(async_re_job):
             print ( "Launching %s in directory %s (cycle %d)" % 
                     (exe.split('/')[-1], os.getcwd()+"/r"+str(replica), cycle) )
 
-        compute_unit=self.cds.submit_compute_unit(compute_unit_description)
+#        compute_unit=self.cds.submit_compute_unit(compute_unit_description)
+        compute_unit=self.pilotcompute.submit_compute_unit(compute_unit_description)
         return compute_unit
 
     def _getAmberUSData(self, file):
