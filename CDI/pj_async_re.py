@@ -122,6 +122,7 @@ from configobj import ConfigObj
 #pilotjob: Packages for Pilot API
 from pilot import PilotComputeService, ComputeDataService, State
 
+__version__ = '0.1.0'
 
 class async_re_job:
     """
@@ -137,6 +138,7 @@ class async_re_job:
         self._checkInput()
 
         self._printStatus()
+
 
 
     def _error(self, text):
