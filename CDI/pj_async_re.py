@@ -462,9 +462,11 @@ Returns true if replica is in 'done' state
             
     def _njobs_to_run(self):
         # size of subjob buffer as a percentage of job slots (TOTAL_CORES/SUBJOB_CORES)
-        subjobs_buffer_size = float(self.keywords.get('SUBJOBS_BUFFER_SIZE'))
+        subjobs_buffer_size = self.keywords.get('SUBJOBS_BUFFER_SIZE')
         if subjobs_buffer_size is None:
             subjobs_buffer_size = 0.5
+        else:
+            subjobs_buffer_size = float(subjobs_buffer_size)
         # find out how many replicas are waiting/(running/submitted)
         self._update_running_no()
         # launch new replicas if the number of submitted/running subjobs is less than
