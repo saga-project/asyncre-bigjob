@@ -115,7 +115,7 @@ all the other methods apply generically to all engine/application types.
 
 """
 
-import os, sys, time, re, pickle, random
+import os, sys, time, re, pickle, random, math, copy
 import pdb
 import shutil, signal, glob
 from configobj import ConfigObj
@@ -461,12 +461,16 @@ Returns true if replica is in 'done' state
             return False
             
     def _njobs_to_run(self):
+        # size of subjob buffer as a percentage of job slots (TOTAL_CORES/SUBJOB_CORES)
+        subjobs_buffer_size = float(self.keywords.get('SUBJOBS_BUFFER_SIZE'))
+        if subjobs_buffer_size is None:
+            subjobs_buffer_size = 0.5
         # find out how many replicas are waiting/(running/submitted)
         self._update_running_no()
         # launch new replicas if the number of submitted/running subjobs is less than
         # the number of available slots (total_cores/subjob_cores) + 50%
         available_slots = int(int(self.keywords.get('TOTAL_CORES'))/int(self.keywords.get('SUBJOB_CORES')))
-        max_njobs_submitted = int(1.5*available_slots)
+        max_njobs_submitted = int((1.+subjobs_buffer_size)*available_slots)
         nlaunch = self.waiting - max(2,self.nreplicas - max_njobs_submitted)
         nlaunch = max(0,nlaunch)
         if self.keywords.get('VERBOSE') == "yes":
@@ -496,9 +500,8 @@ if CPU's are available.
                     print "Launching replica %d cycle %d" % (k,self.status[k]['cycle_current'])
                 self.cus[k] = self._launchReplica(k,self.status[k]['cycle_current'])
                 self.status[k]['running_status'] = "R"
-                
-                
-         
+
+
     def doExchanges(self):
         """
 Randomly selects a pair of replicas in wait state for exchange of 
@@ -535,9 +538,6 @@ thermodynamic parameters.
                 self._buildInpFile(repl_b)
                 self.status[repl_a]['running_status'] = "W"
                 self.status[repl_b]['running_status'] = "W"
-
-
-
 
 
 

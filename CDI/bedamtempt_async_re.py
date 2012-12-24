@@ -141,6 +141,8 @@ Extracts binding energy from Impact output
         # [nr-1]: last record
         # [nf-1]: binding energy (last item)
         #    [2]: total energy item (0 is step number and 1 is temperature)
+        #
+        # (binding energy, total energy)
         return (datai[nr-1][nf-1],datai[nr-1][2])
 
     def print_status(self):
@@ -163,7 +165,31 @@ watch cat BASENAME_stat.txt
         ofile.write(log)
         ofile.close()
 
+    def _getPot(self,repl,cycle):
+        (u, etot) = self._extractLast_BindingEnergy_TotalEnergy(repl,cycle)
+        # removes lambda*u from etot to get e0
+        sid = self.status[repl]['stateid_current']
+        lmb = float(self.stateparams[sid]['lambda'])
+        e0 = float(etot) - lmb*float(u)
+        return (e0,float(u))
 
+    def _getPar(self,repl):
+        sid = self.status[repl]['stateid_current']
+        lmb = float(self.stateparams[sid]['lambda'])
+        tempt = float(self.stateparams[sid]['temperature'])
+        kb = 0.0019872041
+        beta = 1./(kb*tempt)
+        return (beta,lmb)
+
+    def _reduced_energy(self,par,pot):
+        # par: list of parameters
+        # pot: list of potentials
+        # This is for temperature/binding potential beta*(U0+lambda*u)
+        beta = par[0]
+        lmb = par[1]
+        e0 = pot[0]
+        u = pot[1]
+        return beta*(e0 + lmb*u)
 
 if __name__ == '__main__':
 

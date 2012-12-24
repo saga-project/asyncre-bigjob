@@ -1,4 +1,5 @@
 import os, re, random, math
+from numpy import *
 from pj_async_re import async_re_job
 
 class pj_impact_job(async_re_job):
@@ -90,3 +91,129 @@ replica is done after a restart.
             return True
         else:
             return False
+
+#
+# Experimental Gibbs sampling for RE
+#
+
+
+# gives random choice from a set with weight probabilities
+    def _weighted_choice_sub(self,weights):
+        rnd = random.random() * sum(weights)
+        for i, w in enumerate(weights):
+            rnd -= w
+            if rnd < 0:
+                return i
+                
+    def _gibbs_re_j(self,i,par,pot):
+        # produces a replica "j" to exchange with the given replica "i"
+#        re_etot = 0
+        n = len(par)
+        ee = []
+        for j in range(n):
+            ej = self._reduced_energy(par[j],pot[j])
+            ee.append(ej)
+#            re_etot += ej
+        ei = ee[i]
+        ps = zeros(n)
+        for j in range(n):
+            # energy after (i,j) exchange
+            eij = self._reduced_energy(par[i],pot[j]) + self._reduced_energy(par[j],pot[i])
+            # note that total energy is not included, since it is the same for all of the
+            # permutation states.
+            ps[j] = -(eij - ei - ee[j])
+#        ps.append(math.exp(-(eij - ei - ee[j])))
+        ps = exp(ps)
+        return self._weighted_choice_sub(ps)
+
+    def doExchanges(self):
+        """
+Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
+"""
+        # find out which replicas are waiting
+        self._update_running_no()
+        if self.waiting > 1:
+            replicas_waiting = []
+            for k in range(self.nreplicas):
+                if self.status[k]['running_status'] == "W" and self.status[k]['cycle_current'] > 1:
+                    replicas_waiting.append(k)
+
+#        replicas_waiting = [replicas_waiting[4], replicas_waiting[8], replicas_waiting[12], replicas_waiting[16] ]
+
+        # backtrack cycle
+        for k in replicas_waiting:
+            self.status[k]['cycle_current'] -= 1
+            self.status[k]['running_status'] = "E"
+        #collect replica parameters and potentials
+        par = []
+        pot = []
+        for k in replicas_waiting:
+            v = self._getPot(k,self.status[k]['cycle_current'])
+            l = self._getPar(k)
+            par.append(l)
+            pot.append(v)
+        # perform an exchange for each of the n replicas
+        print pot
+        print par
+#        for reps in range(len(replicas_waiting)):
+        for reps in range(1):
+
+
+#        npermt = {}
+#        permt = {}
+#        for reps in range(1000):
+
+            for i in range(len(replicas_waiting)):
+                j = self._gibbs_re_j(i,par,pot)
+                if i != j:
+                    #swap state id's
+                    ri = replicas_waiting[i]
+                    rj = replicas_waiting[j]
+                    sid_i = self.status[ri]['stateid_current'] 
+                    sid_j = self.status[rj]['stateid_current']
+                    self.status[ri]['stateid_current'] = sid_j
+                    self.status[rj]['stateid_current'] = sid_i
+                    #swap parameters
+                    tmp = par[i]
+                    par[i] = par[j]
+                    par[j] = tmp
+
+#            print par
+#            key = str(par)
+#            if npermt.has_key(key):
+#                npermt[key] += 1
+#            else:
+#                npermt[key] = 1
+#                permt[key] = copy.copy(par)
+
+#        ss = 0
+#        for k in npermt.keys():
+#            ss += npermt[k]
+#        ps = []
+#        sumps = 0
+#        for k in npermt.keys():
+#            b = permt[k]
+#            e = 0
+#            for i in range(len(replicas_waiting)):
+#                e += self._reduced_energy(b[i],pot[i])
+#            p = math.exp(-e)
+#            ps.append(p)
+#            sumps += p
+#    
+#        print pot
+#        i = 0
+#        for k in npermt.keys():
+#            print k, npermt[k]/float(ss), ps[i]/sumps
+#            i += 1
+        
+        print par
+
+        # write input files
+        for k in replicas_waiting:
+            # Creates new input file for the next cycle
+            # Places replica back into "W" (wait) state 
+            self.status[k]['cycle_current'] += 1
+            self._buildInpFile(k)
+            self.status[k]['running_status'] = "W"
+
+

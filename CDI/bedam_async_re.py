@@ -3,7 +3,7 @@ from pj_async_re import async_re_job
 from impact_async_re import pj_impact_job
 
 
-class bedam_async_re_job(pj_impact_job,async_re_job):
+class bedam_async_re_job(pj_impact_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
@@ -112,12 +112,25 @@ Performs exchange of lambdas for BEDAM replica exchange.
         """
 Extracts binding energy from Impact output
 """
-        output_file = "r%s/hg_%d.out" % (repl,cycle)
+        output_file = "r%s/%s_%d.out" % (repl,self.basename,cycle)
         datai = self._getImpactData(output_file)
         nf = len(datai[0])
         nr = len(datai)
         return datai[nr-1][nf-1]
 
+    def _getPot(self,repl,cycle):
+        return float(self._extractLast_BindingEnergy(repl,cycle))
+
+    def _getPar(self,repl):
+        sid = self.status[repl]['stateid_current']
+        lmb = self.lambdas[sid]
+        return float(lmb)
+
+    def _reduced_energy(self,par,pot):
+        # par: list of parameters
+        # pot: list of potentials
+        # This is for binding potential beta*lambda*u
+        return self.bedam_beta*par*pot
 
 
 if __name__ == '__main__':
