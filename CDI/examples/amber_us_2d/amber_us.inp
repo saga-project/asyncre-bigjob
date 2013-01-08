@@ -13,6 +13,5 @@ RESOURCE_URL="pbs://radakb@chardonnay.rutgers.edu"
 QUEUE="batch"
 BJ_WORKING_DIR='/home/radakb/devel/git/collaboration/CDI/examples/amber_us_2d/agent'
 TOTAL_CORES=1
-SPMD="single"
 SUBJOB_CORES=1
 VERBOSE="yes"

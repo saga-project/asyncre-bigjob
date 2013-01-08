@@ -1,4 +1,4 @@
-import sys, time, random, math
+import os, sys, time, random, math
 from pj_async_re import async_re_job
 from amber_async_re import pj_amber_job
 
@@ -7,18 +7,21 @@ BOLTZMANN_CONSTANT = 1.3806*6.022/4148
 class amberus_async_re_job(pj_amber_job,async_re_job):
 
     def _checkInput(self):
-        async_re_job._checkInput(self)
+        pj_amber_job._checkInput(self)
         #make sure AMBER umbrella sampling is wanted
         if self.keywords.get('RE_TYPE') != 'AMBERUS':
             self._exit("RE_TYPE is not AMBERUS")
-        #AMBERUS runs with Amber
-        if self.keywords.get('ENGINE') != 'AMBER':
-            self._exit("ENGINE is not AMBER")
         #input files
         self.extfiles = self.keywords.get('ENGINE_INPUT_EXTFILES')
         if not (self.extfiles is None):
             if self.extfiles != '':
                 self.extfiles = self.extfiles.split(',')
+        #flag for turning off exchange
+        if ( self.keywords.get('DO_EXCHANGES') == 'False' 
+             or self.keywords.get('DO_EXCHANGES') == 'No'):
+            self.do_exchanges = False
+        else:
+            self.do_exchanges = True
         #list of force constants
         if self.keywords.get('FORCE_CONSTANTS') is None:
             self._exit("FORCE_CONSTANTS needs to be specified")
@@ -131,33 +134,56 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         u_ba = amberus_async_re_job.bias_energy(bias_coord_a,rk_b,r0_b,isAngle)
         u_bb = amberus_async_re_job.bias_energy(bias_coord_b,rk_b,r0_b,isAngle)
         delta = (u_ab + u_ba) - (u_aa + u_bb)
+
+        if self.do_exchanges:
         
-        if self.keywords.get('VERBOSE') == "yes":
-            print 'Pair Info:'
-            
-            print 'replica = %d'%repl_a
-            print ' bias coordinate : bias position'
-            for r,r0 in zip(bias_coord_a,r0_a): print ' %15s : %13s'%(r,r0)
+            if self.keywords.get('VERBOSE') == "yes":
+                print 'Pair Info:'
+                print 'replica = %d'%repl_a
+                print ' bias coordinate : bias position'
+                for r,r0 in zip(bias_coord_a,r0_a): print ' %15s : %13s'%(r,r0)
+                print 'replica = %d'%repl_b
+                print ' bias coordinate : bias position'
+                for r,r0 in zip(bias_coord_b,r0_b): print ' %15s : %13s'%(r,r0)
+                print "delta = %f kcal/mol"%delta
+
+            u = self.beta*delta
+            Exchange = True
+            if u > 0.:
+                csi = random.random()
+                P_ab = math.exp(-u)
+                if P_ab < csi: Exchange = False
+            else:
+                P_ab = 1.
+                csi  = 0.
+
+            if Exchange:
+                self.status[repl_a]['stateid_current'] = sid_b
+                self.status[repl_b]['stateid_current'] = sid_a
                 
-            print 'replica = %d'%repl_b
-            print ' bias coordinate : bias position'
-            for r,r0 in zip(bias_coord_b,r0_b): print ' %15s : %13s'%(r,r0)
+                if self.keywords.get('VERBOSE') == "yes":
+                    print "Accepted %f %f" % (P_ab,csi)
+                    print (self.status[repl_a]['stateid_current'], 
+                           self.status[repl_b]['stateid_current'])
+            else:
+                if self.keywords.get('VERBOSE') == "yes":
+                    print "Rejected %f %f" % (P_ab,csi)
 
-            print "delta = %f kcal/mol"%delta
-
-        csi = random.random()
-        P_ab = math.exp(-self.beta*delta)
-        if P_ab > csi:
-            self.status[repl_a]['stateid_current'] = sid_b
-            self.status[repl_b]['stateid_current'] = sid_a
-
-            if self.keywords.get('VERBOSE') == "yes":
-                print "Accepted %f %f" % (P_ab,csi)
-                print (self.status[repl_a]['stateid_current'], 
-                       self.status[repl_b]['stateid_current'])
-        else:
-            if self.keywords.get('VERBOSE') == "yes":
-                print "Rejected %f %f" % (P_ab,csi)
+    def _getAmberUSData(self, file):
+        """Reads the bias coordinate values from NMRopt output file
+        """
+        if not os.path.exists(file):
+            msg = 'File does not exist: %s' % file
+            self._exit(msg)
+        data = []
+        f = open(file ,"r")
+        line = f.readline()
+        while line:
+            words = line.split()
+            data.append(words)
+            line = f.readline()
+        f.close()
+        return data
 
     def _extractLastRCs(self,repl,cycle):
         """Extracts the last set of reaction coordinates from NMRopt output

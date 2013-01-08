@@ -198,12 +198,13 @@ these and the other settings.
 
         #pilotjob: optional variables
         self.ppn = self.keywords.get('PPN')
-        if self.ppn is None:
-            self.ppn = 1
-        if self.keywords.get('SPMD') is None:
-            self.spmd="single"
-        else:
-            self.spmd="mpi"
+        if self.ppn is None: self.ppn = 1
+
+        self.spmd = self.keywords.get('SPMD')
+        if self.spmd is None:
+            if self.ppn == 1: self.spmd="single"
+            elif self.ppn > 1: self.spmd="mpi"
+            else: self._exit("PPN needs to be a postive, non-zero integer")
         
         #initializes extfiles variable for 'setupJob'
         self.extfiles = None

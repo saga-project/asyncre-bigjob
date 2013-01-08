@@ -1,4 +1,4 @@
- NVT MD with umbrella restraint
+ GB MD with umbrella restraint
  &cntrl
    irest = 1, ntx = 5,                     ! restart and read velocities
    nstlim = 1000,                          ! simulation length (step limit)
@@ -8,7 +8,7 @@
    ioutfm = 1,                             ! flag for binary coordinates              
    ntc = 2, ntf = 2, tol = 1e-8,           ! SHAKE for all bonds to hydrogen
    ntt = 3, temp0 = 310.0, gamma_ln = 1.0, ! Langevin dynamics 
-   igb = 6,                                ! vacuum simulation (normally a gb flag)
+   igb = 2,                                ! OBC GB solvation 
    tempi = 310.0,                          ! initial temp (for start only)
    nmropt = 1                              ! flag to read "nmr restraints"
  /
