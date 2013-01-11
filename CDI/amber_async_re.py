@@ -66,7 +66,7 @@ class pj_amber_job(async_re_job):
             msg = 'File does not exist: %s' % file
             self._exit(msg)
         data = []
-        f = open(file ,"r")
+        f = self._openfile(file ,"r")
         line = f.readline()
         while line:
             words = line.split()
@@ -75,12 +75,10 @@ class pj_amber_job(async_re_job):
         f.close()
         return data
         
-    def _isDone(self,replica,cycle):
+    def _hasCompleted(self,replica,cycle):
         """
         Returns true if an Amber replica has completed a cycle. Basically 
         checks if the restart file exists.
-        This overrides the generic isDone using pilot-job, which cannot check if
-        a replica is done after a restart.
         """
         rstfile = "r%d/%s_%d.rst7" % (replica, self.basename,cycle)
         if os.path.exists(rstfile):

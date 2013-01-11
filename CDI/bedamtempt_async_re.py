@@ -55,7 +55,7 @@ specified cycle.
         lambd = self.stateparams[stateid]['lambda']
         temperature = self.stateparams[stateid]['temperature']
         # read template buffer
-        tfile = open(template, "r")
+        tfile = self._openfile(template, "r")
         tbuffer = tfile.read()
         tfile.close()
         # make modifications
@@ -64,12 +64,12 @@ specified cycle.
         tbuffer = tbuffer.replace("@lambda@",lambd)
         tbuffer = tbuffer.replace("@temperature@",temperature)
         # write out
-        ofile = open(inpfile, "w")
+        ofile = self._openfile(inpfile, "w")
         ofile.write(tbuffer)
         ofile.close()
 
         # update the history status file
-        ofile = open("r%d/state.history" % replica, "a")
+        ofile = self._openfile("r%d/state.history" % replica, "a")
         ofile.write("%d %d %s %s\n" % (cycle, stateid, lambd, temperature))
         ofile.close()
 
@@ -154,7 +154,7 @@ It's fun to follow the progress in real time by doing:
 watch cat BASENAME_stat.txt
 """
         logfile = "%s_stat.txt" % self.basename
-        ofile = open(logfile,"w")
+        ofile = self._openfile(logfile,"w")
         log = "Replica  State  Lambda Temperature Status  Cycle \n"
         for k in range(self.nreplicas):
             stateid = self.status[k]['stateid_current']

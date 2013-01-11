@@ -51,7 +51,7 @@ at each time step and puts into a big table
         number_line = re.compile("(\s+-*\d\.\d+E[\+-]\d+\s*)+")
         nsamples = 0
         data = []
-        f = open(file ,"r")
+        f = self._openfile(file ,"r")
         line = f.readline()
         while line:
             # fast forward until we get to the line: 
@@ -79,12 +79,10 @@ at each time step and puts into a big table
         f.close()
         return data
         
-    def _isDone(self,replica,cycle):
+    def _hasCompleted(self,replica,cycle):
         """
 Returns true if an IMPACT replica has completed a cycle. Basically checks
 if the restart file exists.
-This overrides the generic isDone using pilot-job, which cannot check if a
-replica is done after a restart.
 """
         rstfile = "r%d/%s_%d.rst" % (replica, self.basename,cycle)
         if os.path.exists(rstfile):
