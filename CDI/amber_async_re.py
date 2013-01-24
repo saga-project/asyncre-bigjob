@@ -1,5 +1,6 @@
 import os, re, random, math
 from pj_async_re import async_re_job
+import numpy as np
 
 class pj_amber_job(async_re_job):
 
@@ -85,3 +86,65 @@ class pj_amber_job(async_re_job):
             return True
         else:
             return False
+
+###########################################################################
+#
+# Work in Progress: Gibbs sampling style exchanges (see impact_async_re.py)
+#
+###########################################################################
+# gives random choice from a set with weight probabilities
+    def _weighted_choice_sub(self,weights):
+        rnd = random.random() * sum(weights)
+        for i, w in enumerate(weights):
+            rnd -= w
+            if rnd < 0:
+                return i
+                
+    def _gibbs_re_j(self,i,nstates):
+        # produces a replica "j" to exchange with the given replica "i"
+        ee = [ self._reduced_energy(j,j) for j in range(nstates) ]
+
+        ps = np.zeros(nstates)
+        for j in range(nstates):
+            # energy after (i,j) exchange
+            eij = self._reduced_energy(i,j) + self._reduced_energy(j,i)
+            ps[j] = -(eij - ee[i] - ee[j])
+        ps = np.exp(ps)
+        return self._weighted_choice_sub(ps)
+
+    def doExchanges(self):
+        """
+Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
+"""
+        # find out which replicas are waiting
+        self._update_running_no()
+        if self.waiting > 1:
+            replicas_waiting = []
+            for k in range(self.nreplicas):
+                if self.status[k]['running_status'] == "W" and self.status[k]['cycle_current'] > 1:
+                    replicas_waiting.append(k)
+
+        # backtrack cycle
+        for k in replicas_waiting:
+            self.status[k]['cycle_current'] -= 1
+            self.status[k]['running_status'] = "E"
+
+        for reps in range(1):
+            for i in range(len(replicas_waiting)):
+                j = self._gibbs_re_j(i,len(replicas_waiting))
+                if i != j:
+                    #swap state id's
+                    ri = replicas_waiting[i]
+                    rj = replicas_waiting[j]
+                    sid_i = self.status[ri]['stateid_current'] 
+                    sid_j = self.status[rj]['stateid_current']
+                    self.status[ri]['stateid_current'] = sid_j
+                    self.status[rj]['stateid_current'] = sid_i
+
+        # write input files
+        for k in replicas_waiting:
+            # Creates new input file for the next cycle
+            # Places replica back into "W" (wait) state 
+            self.status[k]['cycle_current'] += 1
+            self._buildInpFile(k)
+            self.status[k]['running_status'] = "W"
