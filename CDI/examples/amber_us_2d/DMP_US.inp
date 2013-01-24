@@ -12,7 +12,7 @@
    tempi = 310.0,                          ! initial temp (for start only)
    nmropt = 1                              ! flag to read "nmr restraints"
  /
- &wt type='DUMPFREQ', istep1 = 500, / ! print frequency for restrained coordinates
+ &wt type='DUMPFREQ', istep1 = 1, / ! print frequency for restrained coordinates
  &wt type='END', /
  DISANG=DMP_US_@n@.RST
  DUMPAVE=DMP_US_@n@.TRACE

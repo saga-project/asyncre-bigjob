@@ -5,6 +5,7 @@ Contributors:
 
 Emilio Gallicchio <emilio.gallicchio@rutgers.edu>
 Melissa Romanus <melissa.romanus@rutgers.edu>
+Brian Radak <radakb@biomaps.rutgers.edu>
 
 Approach:
 
@@ -197,14 +198,19 @@ these and the other settings.
             self._exit("SUBJOB_CORES needs to be specified")
 
         #pilotjob: optional variables
-        self.ppn = self.keywords.get('PPN')
-        if self.ppn is None: self.ppn = 1
+        if self.keywords.get('PPN') is None: self.ppn = 1
+        else: self.ppn = int(self.keywords.get('PPN'))
 
-        self.spmd = self.keywords.get('SPMD')
-        if self.spmd is None:
-            if self.ppn == 1: self.spmd="single"
-            elif self.ppn > 1: self.spmd="mpi"
-            else: self._exit("PPN needs to be a postive, non-zero integer")
+        if self.keywords.get('SPMD') is None: self.spmd = "single"
+        else: self.spmd = self.keywords.get('SPMD')
+        #self.spmd = self.keywords.get('SPMD')
+        #if self.spmd is None: self.spmd="single"
+        #    if int(self.keywords.get('SUBJOB_CORES')) == 1: 
+        #        self.spmd="single"
+        #    elif int(self.keywords.get('SUBJOB_CORES')) > 1: 
+        #        self.spmd="mpi"
+        #    else: 
+        #        self._exit("SUBJOB_CORES needs to be non-zero and positive")
         
         #initializes extfiles variable for 'setupJob'
         self.extfiles = None

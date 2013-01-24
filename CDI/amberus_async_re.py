@@ -1,8 +1,11 @@
 import os, sys, time, random, math
 from pj_async_re import async_re_job
 from amber_async_re import pj_amber_job
+# AMBER plugins
+from amberio.AmberRestraint import ReadAmberRestraintFile
+from chemistry.amber.readparm import rst7
 
-BOLTZMANN_CONSTANT = 1.3806*6.022/4148
+BOLTZMANN_CONSTANT = 1.38*6.022/4184
 
 class amberus_async_re_job(pj_amber_job,async_re_job):
 
@@ -31,14 +34,7 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         else:
             self.kbias = [item.split(',') for item in kbiasline.split(':')]
         self.nreplicas = len(self.kbias)
-        #conversion for angle force constants (AMBER uses kcal/mol-rad^2!)
-        nbias = len(self.kbias[0])
-        if self.keywords.get('BIAS_IS_ANGLE') is None:
-            self.bias_is_angle = [ False for n in range(nbias) ]
-        else:
-            self.bias_is_angle = self.keywords.get('BIAS_IS_ANGLE').split(',')
-            if len(self.bias_is_angle) != nbias:
-                self._exit("# of biases and BIAS_IS_ANGLE flags don't match")
+
         #list of bias positions
         if self.keywords.get('BIAS_POSITIONS') is None:
             self._exit("BIAS_POSITIONS needs to be specified")
@@ -66,133 +62,108 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         basename = self.basename
         stateid = self.status[replica]['stateid_current']
         cycle = self.status[replica]['cycle_current']
+        restraint_template = '%s.RST'%basename
+        restraint_file = 'r%d/%s_%d.RST'%(replica,basename,cycle)
+        
+        # 1) Make an AmberRestraint object from the template
+        # 2) Modify it to match the current state
+        # 3) Write a new restraint file for the replica
+        umbrella_potential = ReadAmberRestraintFile(restraint_template)
+        for m in range(len(self.kbias[:][0])): # iterate bias dimensions
+            k  = float(self.kbias[stateid][m])
+            r0 = float(self.posbias[stateid][m])
+            umbrella_potential[m].rk[0] = k
+            umbrella_potential[m].rk[1] = k
+            umbrella_potential[m].r[0] = r0 - 100.
+            umbrella_potential[m].r[1] = r0
+            umbrella_potential[m].r[2] = r0
+            umbrella_potential[m].r[3] = r0 + 100.
+        umbrella_potential.WriteAmberRestraintFile(restraint_file)
 
-        restraint_template = "%s.RST" % basename
-        restraint_file = "r%d/%s_%d.RST" % (replica, basename, cycle)
+        input_template = '%s.inp'%basename
+        input_file = 'r%d/%s_%d.inp'%(replica,basename,cycle)
         # read template buffer
-        tfile = open(restraint_template, "r")
+        tfile = open(input_template,'r')
         tbuffer = tfile.read()
         tfile.close()
         # make modifications
-        for i in range(len(self.kbias[:][0])):
-            rk = self.kbias[stateid][i]
-            r0 = self.posbias[stateid][i]
-            tbuffer = tbuffer.replace('@rk%d@'%i,rk)
-            tbuffer = tbuffer.replace('@r0%d@'%i,r0)
+        tbuffer = tbuffer.replace('@n@',str(cycle))
         # write out
-        ofile = open(restraint_file, "w")
-        ofile.write(tbuffer)
-        ofile.close()
-
-        input_template = "%s.inp" % basename
-        input_file = "r%d/%s_%d.inp" % (replica, basename, cycle)
-        # read template buffer
-        tfile = open(input_template, "r")
-        tbuffer = tfile.read()
-        tfile.close()
-        # make modifications
-        tbuffer = tbuffer.replace("@n@",str(cycle))
-        # write out
-        ofile = open(input_file, "w")
+        ofile = open(input_file,'w')
         ofile.write(tbuffer)
         ofile.close()
       
-    @staticmethod
-    def bias_energy(bias_coords, force_constants, bias_positions, isAngle=None):
-        """Calculate the (harmonic) bias energy of coordinates in a given state.
-        """
-        if isAngle == None: isAngle = [ False for i in range(len(bias_coords)) ]
-
-        dr2 = [ (float(r) - float(r0))**2 
-                for r,r0 in zip(bias_coords,bias_positions) ]
-        uBias = 0.
-        for i in range(len(dr2)):
-            if isAngle[i]:
-                uBias += float(force_constants[i])*(math.pi/180.)**2*dr2[i]
-            else:     
-                uBias += float(force_constants[i])*dr2[i]
-        return uBias
-
     def _doExchange_pair(self,repl_a,repl_b):
         """Perform exchange of bias parameters.        
         """
-        cycle_a = self.status[repl_a]['cycle_current']
-        sid_a = self.status[repl_a]['stateid_current']
-        rk_a = self.kbias[sid_a]
-        r0_a = self.posbias[sid_a]
-        bias_coord_a = self._extractLastRCs(repl_a,cycle_a)
-
-        cycle_b = self.status[repl_b]['cycle_current'] 
-        sid_b = self.status[repl_b]['stateid_current']
-        rk_b = self.kbias[sid_b]
-        r0_b = self.posbias[sid_b]
-        bias_coord_b = self._extractLastRCs(repl_b,cycle_b)
-
-        isAngle = self.bias_is_angle
-        u_aa = amberus_async_re_job.bias_energy(bias_coord_a,rk_a,r0_a,isAngle)
-        u_ab = amberus_async_re_job.bias_energy(bias_coord_b,rk_a,r0_a,isAngle)
-        u_ba = amberus_async_re_job.bias_energy(bias_coord_a,rk_b,r0_b,isAngle)
-        u_bb = amberus_async_re_job.bias_energy(bias_coord_b,rk_b,r0_b,isAngle)
-        delta = (u_ab + u_ba) - (u_aa + u_bb)
-
         if self.do_exchanges:
-        
-            if self.keywords.get('VERBOSE') == "yes":
-                print 'Pair Info:'
-                print 'replica = %d'%repl_a
-                print ' bias coordinate : bias position'
-                for r,r0 in zip(bias_coord_a,r0_a): print ' %15s : %13s'%(r,r0)
-                print 'replica = %d'%repl_b
-                print ' bias coordinate : bias position'
-                for r,r0 in zip(bias_coord_b,r0_b): print ' %15s : %13s'%(r,r0)
-                print "delta = %f kcal/mol"%delta
+            # cycle count and state id of the replicas
+            cycle_a = self.status[repl_a]['cycle_current']
+            #sid_a = self.status[repl_a]['stateid_current']
+            cycle_b = self.status[repl_b]['cycle_current'] 
+            #sid_b = self.status[repl_b]['stateid_current']
 
+            # final coordinates from the last cycle of each replica 
+            rst_file_a = 'r%d/%s_%d.rst7'%(repl_a,self.basename,cycle_a)
+            crds_a = rst7(rst_file_a).coords
+            rst_file_b = 'r%d/%s_%d.rst7'%(repl_b,self.basename,cycle_b)
+            crds_b = rst7(rst_file_b).coords
+
+            # current biasing potential of each replica
+            RST_a = 'r%d/%s_%d.RST'%(repl_a,self.basename,cycle_a)
+            umbrella_a = ReadAmberRestraintFile(RST_a)
+            RST_b = 'r%d/%s_%d.RST'%(repl_b,self.basename,cycle_b)
+            umbrella_b = ReadAmberRestraintFile(RST_b)
+
+            # do the energy evaluations
+            u_aa = umbrella_a.Energy(crds_a)
+            u_ab = umbrella_a.Energy(crds_b)
+            u_ba = umbrella_b.Energy(crds_a)
+            u_bb = umbrella_b.Energy(crds_b)
+            delta = (u_ab + u_ba) - (u_aa + u_bb)
             u = self.beta*delta
+       
             Exchange = True
+            P_ab = 1.
+            csi = 0.
             if u > 0.:
                 csi = random.random()
                 P_ab = math.exp(-u)
-                if P_ab < csi: Exchange = False
-            else:
-                P_ab = 1.
-                csi  = 0.
-
+                if csi > P_ab: Exchange = False
             if Exchange:
+                sid_a = self.status[repl_a]['stateid_current']
+                sid_b = self.status[repl_b]['stateid_current']
                 self.status[repl_a]['stateid_current'] = sid_b
                 self.status[repl_b]['stateid_current'] = sid_a
+
+            if self.keywords.get('VERBOSE') == 'yes':
+                # extract the actual coordinates for reporting purposes
+                print ('======================================================='
+                       '=========================')
+                print 'Exchange Attempt : Replicas (%d,%d)'%(repl_a,repl_b)
+                print 'Replica %d Coordinate/Umbrella Info:'%repl_a
+                umbrella_a.PrintRestraintReport(crds_a)
+                umbrella_a.PrintRestraintEnergyReport(crds_a)
+                print 'Replica %d Coordinate/Umbrella Info:'%repl_b
+                umbrella_b.PrintRestraintReport(crds_b)
+                umbrella_b.PrintRestraintEnergyReport(crds_b)
+                print ('======================================================='
+                       '=========================')
+                print 'U_a(x_b) - U_a(x_a) + U_b(x_a) - U_b(x_b) = %f kcal/mol'%delta
+                if Exchange:
+                    print 'Accepted! P(a<->b) = %f >= %f'%(P_ab,csi)
+                    print ('New states for replicas (%s,%s) are (%s,%s)'
+                           %(repl_a,repl_b,
+                             self.status[repl_a]['stateid_current'], 
+                             self.status[repl_b]['stateid_current']))
+                else:
+                    print 'Rejected! P(a<->b) = %f < %f'%(P_ab,csi)
+                print ('======================================================='
+                       '=========================')
                 
-                if self.keywords.get('VERBOSE') == "yes":
-                    print "Accepted %f %f" % (P_ab,csi)
-                    print (self.status[repl_a]['stateid_current'], 
-                           self.status[repl_b]['stateid_current'])
-            else:
-                if self.keywords.get('VERBOSE') == "yes":
-                    print "Rejected %f %f" % (P_ab,csi)
-
-    def _getAmberUSData(self, file):
-        """Reads the bias coordinate values from NMRopt output file
-        """
-        if not os.path.exists(file):
-            msg = 'File does not exist: %s' % file
-            self._exit(msg)
-        data = []
-        f = open(file ,"r")
-        line = f.readline()
-        while line:
-            words = line.split()
-            data.append(words)
-            line = f.readline()
-        f.close()
-        return data
-
-    def _extractLastRCs(self,repl,cycle):
-        """Extracts the last set of reaction coordinates from NMRopt output
-        """
-        trace_file = "r%s/%s_%d.TRACE" % (repl,self.basename,cycle)
-        data = self._getAmberUSData(trace_file)
-        return data[-1][1:]
-
 if __name__ == '__main__':
+
+    BIGJOB_VERBOSE=100
 
     # Parse arguments:
     usage = "%prog <ConfigFile>"

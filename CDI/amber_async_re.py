@@ -5,22 +5,30 @@ class pj_amber_job(async_re_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
-
+        AMBERHOME = os.getenv('AMBERHOME')
+        if AMBERHOME is None:
+            self._exit('Cannot find AMBERHOME.')
+            
         # Check which AMBER MD engine to use, default to sander
-        engine = self.keywords.get('ENGINE').upper()         
-        if engine == 'AMBER' or engine == 'SANDER' or engine == 'AMBER-SANDER':
-            if self.spmd == 'mpi':
-                self.exe = os.popen('which sander.MPI','r').readlines()[0].strip()
-            else:
-                self.exe = os.popen('which sander','r').readlines()[0].strip()
-        elif engine == 'PMEMD' or engine == 'AMBER-PMEMD':
-            if self.spmd == 'mpi':
-                self.exe = os.popen('which pmemd.MPI','r').readlines()[0].strip()
-            else:
-                self.exe = os.popen('which pmemd','r').readlines()[0].strip()
-        else:
-            self._exit("ENGINE is not AMBER")
+        engine = self.keywords.get('ENGINE').upper()
+        sander_flags = [ 'AMBER', 'SANDER', 'AMBER-SANDER' ]
+        pmemd_flags = [ 'PMEMD', 'AMBER-PMEMD' ]
+        engine_name = ''
+        if engine in sander_flags:  engine_name = 'sander'
+        elif engine in pmemd_flags: engine_name = 'pmemd'
+        else:                       self._exit('ENGINE is not AMBER')
+        if self.spmd == 'mpi': engine_name += '.MPI'
+        # else just assume that a serial executable is desired
+        # TODO?: Cuda
 
+        # Check that this executable exists, etc.
+        self.exe = os.path.join(AMBERHOME,'bin',engine_name)
+        if not os.path.exists(self.exe) or not os.access(self.exe,os.X_OK):
+            self._exit('Could not find an executable called %s, expected it to'
+                       ' be at %s'%(engine_name,self.exe))
+
+        print 'AMBERHOME:',AMBERHOME
+        print 'exe:',self.exe
 
     def _launchReplica(self,replica,cycle):
         """Launches Amber sub-job using pilot-job
@@ -49,17 +57,17 @@ class pj_amber_job(async_re_job):
             "executable": self.exe,
             "environment": [],
             "arguments": arguments,
-            "total_cpu_count": int(self.keywords.get('SUBJOB_CORES')),
             "output": log_file,
             "error": err_file,   
             "working_directory":os.getcwd()+"/r"+str(replica),
-            "number_of_processes": self.ppn,
+            "number_of_processes": int(self.keywords.get('SUBJOB_CORES')),
             "spmd_variation": self.spmd,
             }
 
         if self.keywords.get('VERBOSE') == "yes":
             print ( "Launching %s in directory %s (cycle %d)" % 
-                    (self.exe.split('/')[-1], os.getcwd()+"/r"+str(replica), cycle) )
+                    (self.exe.split('/')[-1], os.getcwd()+"/r"+str(replica), 
+                     cycle) )
 
 #        compute_unit=self.cds.submit_compute_unit(compute_unit_description)
         compute_unit=self.pilotcompute.submit_compute_unit(compute_unit_description)
