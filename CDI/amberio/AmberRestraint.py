@@ -33,24 +33,17 @@ def ReadAmberRestraintFile(rstFilename):
     amberRst = AmberRestraint()
     # Read the namelists from the restraint file and look for &rst namelists
     namelists = ReadNamelists(rstFilename)
-    requiredKeys = ['iat']
-    optionalKeys = ['r1','r2','r3','r4','rk2','rk3','rstwt']
-    floatKeys = ['r1','r2','r3','r4','rk2','rk3']
+    floatKeys = ['r0','r1','r2','r3','r4','k0','rk2','rk3']
     for nl in namelists:
         if nl.name == 'rst':
-            for key in requiredKeys:         
-                if key not in nl.keys():
-                    msg = 'ERROR! Required key %s is not present.'%key
-                    raise Exception(msg)
-            for key in optionalKeys:
-                if key not in nl.keys():
-                    nl[key] = None
+            if 'iat' not in nl.keys():
+                msg = 'ERROR! Required key %s is not present.'%key
+                raise Exception(msg)
             for key in floatKeys:
-                if isinstance(nl[key],list):
-                    nl[key] = float(nl[key][0])
-            rst = NmroptRestraint(nl['iat'],nl['r2'],nl['rk2'],nl['r3'],
-                                  nl['rk3'],nl['r1'],nl['r4'],nl['rstwt'])
-            amberRst.append(rst)
+                if key in nl.keys():
+                    if isinstance(nl[key],list):
+                        nl[key] = float(nl[key][0])
+            amberRst.append( NmroptRestraint(nl.pop('iat'),**nl) )
     if len(amberRst) < 1:
         raise Exception('No &rst namelists found in file: %s'%rstFilename)
     return amberRst
@@ -205,54 +198,73 @@ class NmroptRestraint(object):
     NB: As in AMBER, angle positions are in degrees while angle force constants
     are in radians. Distances are always in Angstroms.
     """
-    def __init__(self,iat,r2=None,rk2=None,r3=None,rk3=None,r1=None,r4=None,
-                 rstwt=None):
-        # Hack for just reporting coordinate values without restraint
-        if r2 is None: r2 = 0.
-        if rk2 is None: rk2 = 0.
-        # Hack for purely harmonic potential (inline with "jar" defaults)
-        if r3 is None: r3 = r2
-        if r1 is None: r1 = r2 - 100.
-        if r4 is None: r4 = r3 + 100.
-        if rk3 is None: rk3 = rk2
-        # Store the namelist keys as member data
+    def __init__(self,iat,**rstr_params):
+        # Determine the restraint type from atom and rstwt info
         self.iat = tuple(iat)
         self.nAtoms = len(self.iat)
-        self.r   = [r1,r2,r3,r4]
-        self.rk  = [rk2,rk3]
-        self.rstwt = rstwt
-        # Determine the restraint type and check the input
-        self.rstType = None
-        if self.nAtoms == 2:
-            self.rstType = 'Bond'
-        elif self.nAtoms == 3: 
-            self.rstType = 'Angle'
-        elif self.nAtoms == 4 and self.rstwt is None: 
-            self.rstType = 'Torsion'
-        elif self.nAtoms == 4 and self.rstwt is not None:
+        if 'rstwt' in rstr_params.keys(): 
+            self.rstwt = tuple(rstr_params['rstwt'])
             self.rstType = 'Gen. Dist. Coord.'
-        #
-        # TODO: Implement other restraint types
-        #
-        elif self.nAtoms == 6 or self.nAtoms == 8:
-            self.rstType = 'Gen. Dist. Coord.'
-        else:
-            msg = 'Invalid restraint specification (or not supported yet).'
-            raise Exception(msg)
-
-        # Use radians for angle and torsion calculations
-        if self.rstType == 'Angle' or self.rstType == 'Torsion':
-            self.r = [ r*pi/180. for r in self.r ]
-
-        # Check that enough rstwt values were provided
-        if self.rstType == 'Gen. Dist. Coord':
-            self.rstwt = tuple(self.rstwt)
             if len(self.rstwt) != nAtoms/2:
                 msg = ('Not enough rstwt values provided for %d atom Gen. Dist.'
                        ' Coord. Expected %d, but got %d.'%(self.nAtoms,
                                                            self.nAtoms/2,
                                                            len(self.rstwt)))
                 raise Exception(msg)
+        else:                             
+            self.rstwt = None
+            if self.nAtoms == 2:   self.rstType = 'Bond'
+            elif self.nAtoms == 3: self.rstType = 'Angle'
+            elif self.nAtoms == 4: self.rstType = 'Torsion'
+            else:
+                msg = 'Invalid restraint specification (or not supported yet).'
+                raise Exception(msg)
+        # Set the restraint parameters
+        self.r  = [0., 0., 0., 0.]
+        self.rk = [0., 0.]
+        self.SetRestraintParameters(**rstr_params)
+        
+    def SetRestraintParameters(self,**rstr_params):
+        # A pure harmonic restraint can be set with just r0,
+        if 'r0' in rstr_params.keys(): 
+            r0 = float(rstr_params['r0'])
+            self.r[1:3] = [r0,r0]
+            if self.rstType == 'Torsion':
+                 self.r[0] = r0 - 180.
+                 self.r[3] = r0 + 180.
+            elif self.rstType == 'Angle':
+                self.r[0] = 0.
+                self.r[3] = r0 + 180.
+            else: # all distance restraints
+                self.r[0] = 0.
+                self.r[3] = r0 + 500.
+        # otherwise the four positions need to be set individually.
+        else:
+            if 'r1' in rstr_params.keys(): self.r[0] = float(rstr_params['r1'])
+            if 'r2' in rstr_params.keys(): self.r[1] = float(rstr_params['r2'])
+            if 'r3' in rstr_params.keys(): self.r[2] = float(rstr_params['r3'])
+            if 'r4' in rstr_params.keys(): self.r[3] = float(rstr_params['r4'])
+
+        # Use radians for angle and torsion calculations
+        if self.rstType == 'Angle' or self.rstType == 'Torsion':
+            self.r = [ r*pi/180. for r in self.r ]
+
+        # Check the relative restraint positions.
+        if not self.r[0] <= self.r[1] <= self.r[2] <= self.r[3]:
+            msg = ('Restraint positions must be monotonically increasing'
+                   ' (r1 <= r2 <= r3 <= r4).')
+            raise ValueError(msg)
+
+        #  A pure harmonic restraint can be set with just k0,
+        if 'k0' in rstr_params.keys(): 
+            k0 = float(rstr_params['k0'])
+            self.rk = [k0,k0]
+        # otherwise the two force constants need to be set individually.
+        else:
+            if 'rk2' in rstr_params.keys():
+                self.rk[0] = float(rstr_params['rk2'])
+            if 'rk3' in rstr_params.keys(): 
+                self.rk[1] = float(rstr_params['rk3'])
 
     def Coord(self,crds):
         """Calculate the restraint coordinate.
@@ -280,7 +292,6 @@ class NmroptRestraint(object):
         r - the restraint coordinate (in Angstroms or radians)
         drdx - 3N list of cartesian gradients (unitless or radians/Angstrom)
         """
-        self._checkRestraint()
         r = 0.
         drdx = [ 0. for n in range(len(crds)) ]
         if self.rstType == 'Bond': 
@@ -406,7 +417,6 @@ class NmroptRestraint(object):
         crds - 3N list of coordinates (in Angstroms)
         anames - N list of atom names
         """
-        self._checkRestraint()
         # Use blanks if atom names are not available
         if anames is None: anames = [ '' for i in range(self.nAtoms) ]
         else:              anames = [ anames[i-1] for i in self.iat ]
@@ -453,7 +463,6 @@ class NmroptRestraint(object):
         outfile - file object or name to write data to, default=stdout
         closeafter (bool) - flag to close outfile after writing, default=True
         """
-        self._checkRestraint()
         if hasattr(outfile,'write'):
             pass
         elif isinstance(outfile,str):
@@ -474,19 +483,6 @@ class NmroptRestraint(object):
             outfile.write(' rstwt=%s'%rstwt)
         outfile.write(' / \n')
         if closeafter and outfile is not sys.__stdout__: outfile.close()
-
-    def _checkRestraint(self):
-        # Check the relative restraint positions.
-        if not self.r[0] <= self.r[1] <= self.r[2] <= self.r[3]:
-            # might just need to bump out the endpoints
-            if self.r[1] <= self.r[2]:
-                if self.r[0] > self.r[1]: self.r[0] = self.r[1] - 100.
-                if self.r[3] < self.r[2]: self.r[3] = self.r[2] + 100.
-            # otherwise raise an exception
-            if not self.r[0] <= self.r[1] <= self.r[2] <= self.r[3]:
-                msg = ('Restraint positions must be monotonically increasing'
-                       ' (r1 <= r2 <= r3 <= r4).')
-                raise ValueError(msg)
 
 if __name__ == '__main__':
     import sys
@@ -511,6 +507,9 @@ if __name__ == '__main__':
     print '> rstTest.append(NmroptRestraint((1,2)))'
     print '(makes a dummy restraint between atoms 1 and 2)'
     rstTest.append(NmroptRestraint((1,2)))
+    print '> rstTest[-1].SetRestraintParameters(r0=1.0,k0=10.)'
+    print '(sets a pure harmonic potential with only 2 parameters)'
+    rstTest[-1].SetRestraintParameters(r0=1.0,k0=10.)
 
     # Read crd and parm files if present
     crds = None

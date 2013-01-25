@@ -66,12 +66,13 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
             for m in range(self.bias_dimensions): 
                 k  = float(self.kbias[n][m])
                 r0 = float(self.posbias[n][m])
-                self.umbrellas[n][m].rk[0] = k
-                self.umbrellas[n][m].rk[1] = k
-                self.umbrellas[n][m].r[0] = r0 - 100.
-                self.umbrellas[n][m].r[1] = r0
-                self.umbrellas[n][m].r[2] = r0
-                self.umbrellas[n][m].r[3] = r0 + 100.
+                self.umbrellas[n][m].SetRestraintParameters(r0=r0,k0=k)
+                #self.umbrellas[n][m].rk[0] = k
+                #self.umbrellas[n][m].rk[1] = k
+                #self.umbrellas[n][m].r[0] = r0 - 100.
+                #self.umbrellas[n][m].r[1] = r0
+                #self.umbrellas[n][m].r[2] = r0
+                #self.umbrellas[n][m].r[3] = r0 + 100.
 
     def _buildInpFile(self, replica):
         """
