@@ -20,6 +20,29 @@ Launches Impact sub-job using pilot-job
 
          schrod_env = None
 
+          # Parallelism
+#           'number_of_processes': <Total number of processes to start>,
+#           'processes_per_host':  <Nr of processes per host>,
+#           'threads_per_process': <Nr of threads to start per process>,
+#           'total_core_count':    <Total number of cores requested>,
+#           'spmd_variation':      <Type and startup mechanism>,
+
+	 #pilotjob: Compute Unit (i.e. Job) description
+#         compute_unit_description = {
+#            "executable": os.getcwd()+"/runimpact",
+#            "environment": schrod_env,
+#            "arguments": [input_file],
+#            "number_of_processes": 1,
+#            "threads_per_process": int(self.keywords.get('SUBJOB_CORES')),
+#            "total_core_count": int(self.keywords.get('SUBJOB_CORES')),
+#            "output": log_file,
+#            "error": err_file,   
+#            "working_directory":os.getcwd()+"/r"+str(replica),
+#            "spmd_variation":self.keywords.get('SPMD')
+#         }  
+
+
+
 	 #pilotjob: Compute Unit (i.e. Job) description
          compute_unit_description = {
             "executable": os.getcwd()+"/runimpact",

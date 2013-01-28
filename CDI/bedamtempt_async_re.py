@@ -134,7 +134,7 @@ Performs exchange of lambdas for BEDAM replica exchange.
         """
 Extracts binding energy from Impact output
 """
-        output_file = "r%s/hg_%d.out" % (repl,cycle)
+        output_file = "r%s/%s_%d.out" % (repl,self.basename,cycle)
         datai = self._getImpactData(output_file)
         nf = len(datai[0])
         nr = len(datai)
