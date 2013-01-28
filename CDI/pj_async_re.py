@@ -169,14 +169,19 @@ class async_re_job:
             print k, v
 
     def _openfile(self,name,mode):
+        maxtries = 100
+        tries = 0
         f = None
-        while not f:
+        while not f and tries <= maxtries:
             try:
                 f = open(name,mode)
             except IOError:
                 print "Warning: unable to access file %s, re-trying in 1 second ..." % name
                 f = None
+                tries += 1
                 time.sleep(1)
+        if tries > maxtries:
+            self._exit("Too many failures accessing file %s: quitting." % name )
         return f
 
     def _checkInput(self):
