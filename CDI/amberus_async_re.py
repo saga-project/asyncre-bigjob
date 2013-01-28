@@ -89,13 +89,13 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         input_template = '%s.inp'%self.basename
         input_file = 'r%d/%s_%d.inp'%(replica,self.basename,cycle)
         # read template buffer
-        tfile = open(input_template,'r')
+        tfile = self._openfile(input_template,'r')
         tbuffer = tfile.read()
         tfile.close()
         # make modifications
         tbuffer = tbuffer.replace('@n@',str(cycle))
         # write out
-        ofile = open(input_file,'w')
+        ofile = self._openfile(input_file, "w")
         ofile.write(tbuffer)
         ofile.close()
       

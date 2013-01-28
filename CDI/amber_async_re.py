@@ -74,12 +74,10 @@ class pj_amber_job(async_re_job):
         compute_unit=self.pilotcompute.submit_compute_unit(compute_unit_description)
         return compute_unit
         
-    def _isDone(self,replica,cycle):
+    def _hasCompleted(self,replica,cycle):
         """
         Returns true if an Amber replica has completed a cycle. Basically 
         checks if the restart file exists.
-        This overrides the generic isDone using pilot-job, which cannot check if
-        a replica is done after a restart.
         """
         rstfile = "r%d/%s_%d.rst7" % (replica, self.basename,cycle)
         if os.path.exists(rstfile):
