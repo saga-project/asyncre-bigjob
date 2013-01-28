@@ -1,24 +1,39 @@
 import os, re, random, math
 from pj_async_re import async_re_job
+import numpy as np
 
 class pj_amber_job(async_re_job):
+
+    def _checkInput(self):
+        async_re_job._checkInput(self)
+        AMBERHOME = os.getenv('AMBERHOME')
+        if AMBERHOME is None:
+            self._exit('Cannot find AMBERHOME.')
+            
+        # Check which AMBER MD engine to use, default to sander
+        engine = self.keywords.get('ENGINE').upper()
+        sander_flags = [ 'AMBER', 'SANDER', 'AMBER-SANDER' ]
+        pmemd_flags = [ 'PMEMD', 'AMBER-PMEMD' ]
+        engine_name = ''
+        if engine in sander_flags:  engine_name = 'sander'
+        elif engine in pmemd_flags: engine_name = 'pmemd'
+        else:                       self._exit('ENGINE is not AMBER')
+        if self.spmd == 'mpi': engine_name += '.MPI'
+        # else just assume that a serial executable is desired
+        # TODO?: Cuda
+
+        # Check that this executable exists, etc.
+        self.exe = os.path.join(AMBERHOME,'bin',engine_name)
+        if not os.path.exists(self.exe) or not os.access(self.exe,os.X_OK):
+            self._exit('Could not find an executable called %s, expected it to'
+                       ' be at %s'%(engine_name,self.exe))
+
+        print 'AMBERHOME:',AMBERHOME
+        print 'exe:',self.exe
 
     def _launchReplica(self,replica,cycle):
         """Launches Amber sub-job using pilot-job
         """
-
-        if self.keywords.get('SPMD') is None:
-            spmd = 'single'
-        else:
-            spmd = self.keywords.get('SPMD')
-            if spmd == 'single':
-                exe = os.popen('which sander','r').readlines()[0].strip()
-            elif spmd == 'mpi':
-                exe = os.popen('which sander.MPI','r').readlines()[0].strip()
-
-        if self.keywords.get('PPN') is None: ppn = 1
-        else:                                ppn = int(self.keywords.get('PPN'))
-
         input_file = "%s_%d.inp" % (self.basename, cycle)
         out_file = "%s_%d.out" % (self.basename, cycle)
         prm_file = "%s.parm7" % self.basename
@@ -40,40 +55,24 @@ class pj_amber_job(async_re_job):
 
         #pilotjob: Compute Unit (i.e. Job) description
         compute_unit_description = {
-            "executable": exe,
+            "executable": self.exe,
             "environment": [],
             "arguments": arguments,
-            "total_cpu_count": int(self.keywords.get('SUBJOB_CORES')),
             "output": log_file,
             "error": err_file,   
             "working_directory":os.getcwd()+"/r"+str(replica),
-            "number_of_processes": ppn, 
-            "spmd_variation": spmd,
+            "number_of_processes": int(self.keywords.get('SUBJOB_CORES')),
+            "spmd_variation": self.spmd,
             }
 
         if self.keywords.get('VERBOSE') == "yes":
             print ( "Launching %s in directory %s (cycle %d)" % 
-                    (exe.split('/')[-1], os.getcwd()+"/r"+str(replica), cycle) )
+                    (self.exe.split('/')[-1], os.getcwd()+"/r"+str(replica), 
+                     cycle) )
 
 #        compute_unit=self.cds.submit_compute_unit(compute_unit_description)
         compute_unit=self.pilotcompute.submit_compute_unit(compute_unit_description)
         return compute_unit
-
-    def _getAmberUSData(self, file):
-        """Reads the bias coordinate values from NMRopt output file
-        """
-        if not os.path.exists(file):
-            msg = 'File does not exist: %s' % file
-            self._exit(msg)
-        data = []
-        f = self._openfile(file ,"r")
-        line = f.readline()
-        while line:
-            words = line.split()
-            data.append(words)
-            line = f.readline()
-        f.close()
-        return data
         
     def _hasCompleted(self,replica,cycle):
         """
@@ -85,3 +84,65 @@ class pj_amber_job(async_re_job):
             return True
         else:
             return False
+
+###########################################################################
+#
+# Work in Progress: Gibbs sampling style exchanges (see impact_async_re.py)
+#
+###########################################################################
+# gives random choice from a set with weight probabilities
+    def _weighted_choice_sub(self,weights):
+        rnd = random.random() * sum(weights)
+        for i, w in enumerate(weights):
+            rnd -= w
+            if rnd < 0:
+                return i
+                
+    def _gibbs_re_j(self,i,nstates):
+        # produces a replica "j" to exchange with the given replica "i"
+        ee = [ self._reduced_energy(j,j) for j in range(nstates) ]
+
+        ps = np.zeros(nstates)
+        for j in range(nstates):
+            # energy after (i,j) exchange
+            eij = self._reduced_energy(i,j) + self._reduced_energy(j,i)
+            ps[j] = -(eij - ee[i] - ee[j])
+        ps = np.exp(ps)
+        return self._weighted_choice_sub(ps)
+
+    def doExchanges(self):
+        """
+Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
+"""
+        # find out which replicas are waiting
+        self._update_running_no()
+        if self.waiting > 1:
+            replicas_waiting = []
+            for k in range(self.nreplicas):
+                if self.status[k]['running_status'] == "W" and self.status[k]['cycle_current'] > 1:
+                    replicas_waiting.append(k)
+
+        # backtrack cycle
+        for k in replicas_waiting:
+            self.status[k]['cycle_current'] -= 1
+            self.status[k]['running_status'] = "E"
+
+        for reps in range(1):
+            for i in range(len(replicas_waiting)):
+                j = self._gibbs_re_j(i,len(replicas_waiting))
+                if i != j:
+                    #swap state id's
+                    ri = replicas_waiting[i]
+                    rj = replicas_waiting[j]
+                    sid_i = self.status[ri]['stateid_current'] 
+                    sid_j = self.status[rj]['stateid_current']
+                    self.status[ri]['stateid_current'] = sid_j
+                    self.status[rj]['stateid_current'] = sid_i
+
+        # write input files
+        for k in replicas_waiting:
+            # Creates new input file for the next cycle
+            # Places replica back into "W" (wait) state 
+            self.status[k]['cycle_current'] += 1
+            self._buildInpFile(k)
+            self.status[k]['running_status'] = "W"
