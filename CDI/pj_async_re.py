@@ -219,14 +219,6 @@ these and the other settings.
 
         if self.keywords.get('SPMD') is None: self.spmd = "single"
         else: self.spmd = self.keywords.get('SPMD')
-        #self.spmd = self.keywords.get('SPMD')
-        #if self.spmd is None: self.spmd="single"
-        #    if int(self.keywords.get('SUBJOB_CORES')) == 1: 
-        #        self.spmd="single"
-        #    elif int(self.keywords.get('SUBJOB_CORES')) > 1: 
-        #        self.spmd="mpi"
-        #    else: 
-        #        self._exit("SUBJOB_CORES needs to be non-zero and positive")
         
         #initializes extfiles variable for 'setupJob'
         self.extfiles = None

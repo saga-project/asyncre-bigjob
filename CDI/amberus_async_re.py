@@ -1,10 +1,8 @@
-import os, sys, time, random, math
+import random, math
 from pj_async_re import async_re_job
 from amber_async_re import pj_amber_job
 # AMBER plugins
 from amberio.AmberRestraint import ReadAmberRestraintFile
-from chemistry.amber.readparm import rst7
-
 # uses values from sander/src/constants.F90
 BOLTZMANN_CONSTANT = 1.380658*6.0221367/4184 # in kcal/mol-K
 
@@ -15,37 +13,28 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         #make sure AMBER umbrella sampling is wanted
         if self.keywords.get('RE_TYPE') != 'AMBERUS':
             self._exit("RE_TYPE is not AMBERUS")
-        #input files
-        self.extfiles = self.keywords.get('ENGINE_INPUT_EXTFILES')
-        if not (self.extfiles is None):
-            if self.extfiles != '':
-                self.extfiles = self.extfiles.split(',')
-        #flag for turning off exchange
-        if ( self.keywords.get('DO_EXCHANGES') == 'False' 
-             or self.keywords.get('DO_EXCHANGES') == 'No'):
-            self.do_exchanges = False
-        else:
-            self.do_exchanges = True
-        #list of force constants
+
+        # Quick function to convert delimited state parameters to a 2d list
+        def ParseStateParams(paramline, state_delimiter=':'):
+            if [paramline] == paramline.split(state_delimiter):
+                params = [ [item] for item in paramline.split(',') ]
+            else:
+                params = [ item.split(',') 
+                           for item in paramline.split(state_delimiter)]
+            return params
+
+        # list of force constants
         if self.keywords.get('FORCE_CONSTANTS') is None:
             self._exit("FORCE_CONSTANTS needs to be specified")
-        kbiasline = self.keywords.get('FORCE_CONSTANTS')
-        if [kbiasline] == kbiasline.split(':'):
-            self.kbias = [[item] for item in kbiasline.split(',')]
-        else:
-            self.kbias = [item.split(',') for item in kbiasline.split(':')]
-        self.nreplicas = len(self.kbias)
-        self.bias_dimensions = len(self.kbias[:][0])
-
-        #list of bias positions
+        kbias = ParseStateParams(self.keywords.get('FORCE_CONSTANTS'))
+        # list of bias positions
         if self.keywords.get('BIAS_POSITIONS') is None:
             self._exit("BIAS_POSITIONS needs to be specified")
-        posbiasline = self.keywords.get('BIAS_POSITIONS')
-        if [posbiasline] == posbiasline.split(':'):
-            self.posbias = [[item] for item in posbiasline.split(',')]
-        else:
-            self.posbias = [item.split(',') for item in posbiasline.split(':')] 
-        if len(self.posbias) != self.nreplicas:
+        posbias = ParseStateParams(self.keywords.get('BIAS_POSITIONS'))
+        # check that parameter dimensions match
+        self.nreplicas = len(kbias)
+        bias_dimensions = len(kbias[:][0])
+        if len(posbias) != self.nreplicas:
             msg = ('Number of FORCE_CONSTANTS not equal to number of'
                    ' BIAS_POSITIONS')
             self._exit(msg)
@@ -57,22 +46,16 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         self.beta = 1./(BOLTZMANN_CONSTANT*temperature)
 
         # 1) Read the AmberRestraint template
-        # 2) Modify a new object for each state
+        # 2) Modify a new object for each state/replica
         # 3) Store a list of the umbrella objects
-        self.umbrellas = []
         restraint_template = '%s.RST'%self.basename
+        self.umbrellas = [ ReadAmberRestraintFile(restraint_template)
+                           for n in range(self.nreplicas) ]
         for n in range(self.nreplicas):
-            self.umbrellas.append( ReadAmberRestraintFile(restraint_template) )
-            for m in range(self.bias_dimensions): 
-                k  = float(self.kbias[n][m])
-                r0 = float(self.posbias[n][m])
+            for m in range(bias_dimensions): 
+                k  = float(kbias[n][m])
+                r0 = float(posbias[n][m])
                 self.umbrellas[n][m].SetRestraintParameters(r0=r0,k0=k)
-                #self.umbrellas[n][m].rk[0] = k
-                #self.umbrellas[n][m].rk[1] = k
-                #self.umbrellas[n][m].r[0] = r0 - 100.
-                #self.umbrellas[n][m].r[1] = r0
-                #self.umbrellas[n][m].r[2] = r0
-                #self.umbrellas[n][m].r[3] = r0 + 100.
 
     def _buildInpFile(self, replica):
         """
@@ -95,7 +78,7 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         # make modifications
         tbuffer = tbuffer.replace('@n@',str(cycle))
         # write out
-        ofile = self._openfile(input_file, "w")
+        ofile = self._openfile(input_file,'w')
         ofile.write(tbuffer)
         ofile.close()
       
@@ -159,20 +142,32 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
                 print ('======================================================='
                        '=========================')
                 
-    def _extractLastCoordinates(self,repl):
-        # Return a 3N list of coordinates from the last restart (rst7) file
-        cycle = self.status[repl]['cycle_current']
-        rst_file = 'r%d/%s_%d.rst7'%(repl,self.basename,cycle)
-        return rst7(rst_file).coords
+    def _computeSwapMatrix(self,replicas):
+        # Compute all energies needed for permutation of replicas and states
+        nreplicas = len(replicas)
+        ee = [ [ 0. for j in range(nreplicas) ] for i in range(nreplicas) ]
+        for i,repl_i in enumerate(replicas):
+            crds_i = self._extractLastCoordinates(repl_i)
+            # case repl_i = repl_j:
+            sid_i = self.status[repl_i]['stateid_current']
+            eii =  self.beta*self.umbrellas[sid_i].Energy(crds_i) 
+            ee[i][i] = eii
+            for j,repl_j in enumerate(replicas[0:i]): 
+                # case repl_i != repl_j:
+                sid_j = self.status[repl_j]['stateid_current']
+                eij = self.beta*self.umbrellas[sid_j].Energy(crds_i) 
+                ee[i][j] += eij
+                ee[j][i] += eij
+        return ee
 
-    def _reduced_energy(self,state_i,state_j):
-        # Return the reduced energy in state_i of crds from state_j
-        crds_j = self._extractLastCoordinates(state_j)
+    def _reduced_energy(self,state_i,replica_j):
+        # Return the reduced energy in state_i of crds from replica_j
+        crds_j = self._extractLastCoordinates(replica_j)
         umbrella_i = self.umbrellas[state_i]
         return self.beta*umbrella_i.Energy(crds_j)
 
-    
 if __name__ == '__main__':
+    import sys, time
 
     BIGJOB_VERBOSE=100
 

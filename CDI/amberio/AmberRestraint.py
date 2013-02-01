@@ -205,7 +205,7 @@ class NmroptRestraint(object):
         if 'rstwt' in rstr_params.keys(): 
             self.rstwt = tuple(rstr_params['rstwt'])
             self.rstType = 'Gen. Dist. Coord.'
-            if len(self.rstwt) != nAtoms/2:
+            if len(self.rstwt) != self.nAtoms/2:
                 msg = ('Not enough rstwt values provided for %d atom Gen. Dist.'
                        ' Coord. Expected %d, but got %d.'%(self.nAtoms,
                                                            self.nAtoms/2,
@@ -238,7 +238,7 @@ class NmroptRestraint(object):
                 self.r[0] = 0.
                 self.r[3] = r0 + 180.
             else: # all distance restraints
-                self.r[0] = 0.
+                self.r[0] = r0 - 500.
                 self.r[3] = r0 + 500.
         # otherwise the four positions need to be set individually.
         else:
@@ -299,21 +299,14 @@ class NmroptRestraint(object):
         if self.rstType == 'Bond': 
             i = self.iat[0] - 1
             j = self.iat[1] - 1
-            drdxi = [ 0., 0., 0.]
-            drdxj = [ 0., 0., 0.]
-            #r = coordinates.BondAndGradients(crds,i,j,drdxi,drdxj)
-            r = coordinates.Bond(crds,i,j)
+            r,drdxi,drdxj = coordinates.BondAndGradients(crds,i,j)
             drdx[3*i:3*(i+1)] = drdxi
             drdx[3*j:3*(j+1)] = drdxj
         elif self.rstType == 'Angle':
             i = self.iat[0] - 1
             j = self.iat[1] - 1
             k = self.iat[2] - 1
-            drdxi = [ 0., 0., 0.]
-            drdxj = [ 0., 0., 0.]
-            drdxk = [ 0., 0., 0.]
-            #r = coordinates.AngleAndGradients(crds,i,j,k,drdxi,drdxj,drdxk)
-            r = coordinates.Angle(crds,i,j,k)
+            r,drdxi,drdxj,drdxk = coordinates.AngleAndGradients(crds,i,j,k)
             drdx[3*i:3*(i+1)] = drdxi
             drdx[3*j:3*(j+1)] = drdxj
             drdx[3*k:3*(k+1)] = drdxk
@@ -322,12 +315,8 @@ class NmroptRestraint(object):
             j = self.iat[1] - 1
             k = self.iat[2] - 1
             l = self.iat[3] - 1
-            drdxi = [ 0., 0., 0.]
-            drdxj = [ 0., 0., 0.]
-            drdxk = [ 0., 0., 0.]
-            drdxl = [ 0., 0., 0.]
-            #r = coordinates.DihedralAndGradients(crds,i,j,k,l,drdxi,drdxj,drdxk,drdxl)
-            r = coordinates.Dihedral(crds,i,j,k,l)
+            r,drdxi,drdxj,drdxk,drdxl = (
+                coordinates.DihedralAndGradients(crds,i,j,k,l) )
             drdx[3*i:3*(i+1)] = drdxi
             drdx[3*j:3*(j+1)] = drdxj
             drdx[3*k:3*(k+1)] = drdxk
@@ -336,10 +325,8 @@ class NmroptRestraint(object):
             for k in range(len(self.rstwt)):
                 i = self.iat[2*k+0] - 1
                 j = self.iat[2*k+1] - 1
-                drdxi = [ 0., 0., 0.]
-                drdxj = [ 0., 0., 0.]
-                #r += self.rstwt[k]*coordinates.BondAndGradients(crds,i,j,drdxi,drdxj)
-                r += self.rstwt[k]*coordinates.Bond(crds,i,j)
+                x,drdxi,drdkj = coordinates.BondAndGradients(crds,i,j)
+                r += self.rstwt[k]*x
                 for m in range(3):
                     drdx[3*i+m] += self.rstwt[k]*drdxi[m]
                     drdx[3*j+m] += self.rstwt[k]*drdxj[m]

@@ -13,7 +13,10 @@ def Bond(crds,i,j):
     return BondFromVecs(crds[3*i:3*(i+1)],crds[3*j:3*(j+1)])
     
 def BondAndGradients(crds,i,j):
-    pass
+    # TODO!
+    drdxi = [ 0., 0., 0.]
+    drdxj = [ 0., 0., 0.]
+    return Bond(crds,i,j),drdxi,drdxj
 
 def BondFromVecs(a,b):
     return VecMag(VecDiff(a,b))
@@ -21,8 +24,12 @@ def BondFromVecs(a,b):
 def Angle(crds,i,j,k):
     return AngleFromVecs(crds[3*i:3*(i+1)],crds[3*j:3*(j+1)],crds[3*k:3*(k+1)])
 
-def AngleAndGradients():
-    pass
+def AngleAndGradients(crds,i,j,k):
+    # TODO!
+    drdxi = [ 0., 0., 0.]
+    drdxj = [ 0., 0., 0.]
+    drdxk = [ 0., 0., 0.]
+    return Angle(crds,i,j,k),drdxi,drdxj,drdxk
 
 def AngleFromVecs(a,b,c):
     rBA = BondFromVecs(b,a)
@@ -37,8 +44,13 @@ def Dihedral(crds,i,j,k,l):
     vl = crds[3*l:3*(l+1)]
     return DihedralFromVecs(vi,vj,vk,vl)
 
-def DihedralAndGradients():
-    pass
+def DihedralAndGradients(crds,i,j,k,l):
+    # TODO!
+    drdxi = [ 0., 0., 0.]
+    drdxj = [ 0., 0., 0.]
+    drdxk = [ 0., 0., 0.]
+    drdxl = [ 0., 0., 0.]
+    return Dihedral(crds,i,j,k,l),drdxi,drdxj,drdxk,drdxl
 
 def DihedralFromVecs(a,b,c,d):
     vAB = VecDiff(a,b)
