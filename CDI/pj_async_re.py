@@ -7,6 +7,7 @@ Contributors:
 Emilio Gallicchio <emilio.gallicchio@rutgers.edu>
 Brian Radak <radakb@biomaps.rutgers.edu>
 Melissa Romanus <melissa.romanus@rutgers.edu>
+Brian Radak <radakb@biomaps.rutgers.edu>
 
 """
 
@@ -62,6 +63,22 @@ class async_re_job:
         for k, v in self.keywords.iteritems():
             print k, v
 
+    def _openfile(self,name,mode):
+        maxtries = 100
+        tries = 0
+        f = None
+        while not f and tries <= maxtries:
+            try:
+                f = open(name,mode)
+            except IOError:
+                print "Warning: unable to access file %s, re-trying in 1 second ..." % name
+                f = None
+                tries += 1
+                time.sleep(1)
+        if tries > maxtries:
+            self._exit("Too many failures accessing file %s: quitting." % name )
+        return f
+
     def _checkInput(self):
         """ 
 Checks that the required parameters are specified and parses
@@ -92,13 +109,11 @@ these and the other settings.
             self._exit("SUBJOB_CORES needs to be specified")
 
         #pilotjob: optional variables
-        self.ppn = self.keywords.get('PPN')
-        if self.ppn is None:
-            self.ppn = 1
-        if self.keywords.get('SPMD') is None:
-            self.spmd="single"
-        else:
-            self.spmd="mpi"
+        if self.keywords.get('PPN') is None: self.ppn = 1
+        else: self.ppn = int(self.keywords.get('PPN'))
+
+        if self.keywords.get('SPMD') is None: self.spmd = "single"
+        else: self.spmd = self.keywords.get('SPMD')
         
         #initializes extfiles variable for 'setupJob'
         self.extfiles = None
@@ -247,7 +262,7 @@ Saves the current state of the RE job in the BASENAME.stat
 file using pickle
 """
         status_file = "%s.stat" % self.basename
-        f = open(status_file, "w")
+        f = self._openfile(status_file, "w")
         pickle.dump(self.status, f)
         #pickle.dump(self.node_status, f)
         f.close()
@@ -258,7 +273,7 @@ Loads the current state of the RE job from BASENAME.stat
 file using pickle
 """
         status_file = "%s.stat" % self.basename
-        f = open(status_file, "r")
+        f = self._openfile(status_file, "r")
         self.status = pickle.load(f)
         f.close()
 
@@ -271,7 +286,7 @@ It's fun to follow the progress in real time by doing:
 watch cat BASENAME_stat.txt
 """
         logfile = "%s_stat.txt" % self.basename
-        ofile = open(logfile,"w")
+        ofile = self._openfile(logfile,"w")
         log = "Replica  State  Status  Cycle \n"
         for k in range(self.nreplicas):
             log += "%6d   %5d  %5s  %5d \n" % (k, self.status[k]['stateid_current'], 
@@ -310,21 +325,31 @@ Update the status of the specified replica. If it has completed a cycle the
 input file for the next cycle is prepared and the replica is placed in
 the wait state.
 """
-        if self.status[replica]['running_status'] == "R":
-            if self._isDone(replica,self.status[replica]['cycle_current']):
-                self.status[replica]['running_status'] = "S"
-                self.status[replica]['cycle_current'] += 1
-                self._buildInpFile(replica)
-                self.status[replica]['running_status'] = "W"
-                #node = self.status[replica]['compute_node']
-                #self.node_status[node] = None
-                #self.status[replica]['compute_node'] = None
-            else:
-                if restart:
-                    #when restarting, if a replica is not done it will not get done,
-                    #place it back in wait so it can be submitted again.
+        this_cycle = self.status[replica]['cycle_current']
+
+
+        if restart:
+
+            if self.status[replica]['running_status'] == "R":
+                if self._hasCompleted(replica,this_cycle):
+                    self.status[replica]['cycle_current'] += 1
+                else:
+                    print "_updateStatus_replica(): Warning: restarting replica %d (cycle %d)" % (replica,this_cycle)
+            self._buildInpFile(replica)
+            self.status[replica]['running_status'] = "W"
+
+        else:
+
+            if self.status[replica]['running_status'] == "R":
+                if self._isDone(replica,this_cycle):
+                    self.status[replica]['running_status'] = "S"
+                    if self._hasCompleted(replica,this_cycle):
+                        self.status[replica]['cycle_current'] += 1
+                    else:
+                        print "_updateStatus_replica(): Warning: restarting replica %d (cycle %d)" % (replica,this_cycle)
+                    self._buildInpFile(replica)
                     self.status[replica]['running_status'] = "W"
-  
+                            
     def _update_running_no(self):
         """
 Updates the number of running replicas
@@ -346,15 +371,37 @@ Calls in this case pilot-job version.
 
     def _isDone_PJ(self,replica,cycle):
         """
-Returns true if replica is in 'done' state
+Returns true if a replica has exited (done or failed)
 """
        	#pilotjob: Get status of the compute unit
 	#pilotjob: Query the replica to see if it is in the done state
-        if self.cus[replica].get_state() == "Done":
+        state = self.cus[replica].get_state()
+        if state == "Done" or state == "Failed" or state == "Canceled":
             return True
         else:
             return False
             
+      
+    def _hasCompleted(self,replica,cycle):
+        """
+Attempts to check whether a replica has completed successfully from the bigjob
+compute unit. This is not expected to work during a restart when compute units
+are not available. In the latter case success is assumed. MD engine modules
+are recommended to override this default routine with one that implements 
+a better test of success such as the existence of a restart file or similar.
+""" 
+        try:
+            state = self.cus[replica].get_state()
+        except:
+            print "_hasCompleted(): Warning: unable to query replica state. Assuming success ..."
+            return True
+
+        if state == "Done":
+            return True
+        else:
+            return False
+
+
     def _njobs_to_run(self):
         # size of subjob buffer as a percentage of job slots (TOTAL_CORES/SUBJOB_CORES)
         subjobs_buffer_size = self.keywords.get('SUBJOBS_BUFFER_SIZE')

@@ -53,7 +53,7 @@ specified cycle.
         inpfile = "r%d/%s_%d.inp" % (replica, basename, cycle)
         lambd = self.lambdas[stateid]
         # read template buffer
-        tfile = open(template, "r")
+        tfile = self._openfile(template, "r")
         tbuffer = tfile.read()
         tfile.close()
         # make modifications
@@ -61,12 +61,12 @@ specified cycle.
         tbuffer = tbuffer.replace("@nm1@",str(cycle-1))
         tbuffer = tbuffer.replace("@lambda@",lambd)
         # write out
-        ofile = open(inpfile, "w")
+        ofile = self._openfile(inpfile, "w")
         ofile.write(tbuffer)
         ofile.close()
 
         # update the history status file
-        ofile = open("r%d/state.history" % replica, "a")
+        ofile = self._openfile("r%d/state.history" % replica, "a")
         ofile.write("%d %d %s\n" % (cycle, stateid, lambd))
         ofile.close()
         

@@ -20,6 +20,29 @@ Launches Impact sub-job using pilot-job
 
          schrod_env = None
 
+          # Parallelism
+#           'number_of_processes': <Total number of processes to start>,
+#           'processes_per_host':  <Nr of processes per host>,
+#           'threads_per_process': <Nr of threads to start per process>,
+#           'total_core_count':    <Total number of cores requested>,
+#           'spmd_variation':      <Type and startup mechanism>,
+
+	 #pilotjob: Compute Unit (i.e. Job) description
+#         compute_unit_description = {
+#            "executable": os.getcwd()+"/runimpact",
+#            "environment": schrod_env,
+#            "arguments": [input_file],
+#            "number_of_processes": 1,
+#            "threads_per_process": int(self.keywords.get('SUBJOB_CORES')),
+#            "total_core_count": int(self.keywords.get('SUBJOB_CORES')),
+#            "output": log_file,
+#            "error": err_file,   
+#            "working_directory":os.getcwd()+"/r"+str(replica),
+#            "spmd_variation":self.keywords.get('SPMD')
+#         }  
+
+
+
 	 #pilotjob: Compute Unit (i.e. Job) description
          compute_unit_description = {
             "executable": os.getcwd()+"/runimpact",
@@ -51,7 +74,7 @@ at each time step and puts into a big table
         number_line = re.compile("(\s+-*\d\.\d+E[\+-]\d+\s*)+")
         nsamples = 0
         data = []
-        f = open(file ,"r")
+        f = self._openfile(file ,"r")
         line = f.readline()
         while line:
             # fast forward until we get to the line: 
@@ -79,12 +102,10 @@ at each time step and puts into a big table
         f.close()
         return data
         
-    def _isDone(self,replica,cycle):
+    def _hasCompleted(self,replica,cycle):
         """
 Returns true if an IMPACT replica has completed a cycle. Basically checks
 if the restart file exists.
-This overrides the generic isDone using pilot-job, which cannot check if a
-replica is done after a restart.
 """
         rstfile = "r%d/%s_%d.rst" % (replica, self.basename,cycle)
         if os.path.exists(rstfile):
