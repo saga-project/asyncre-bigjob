@@ -2,20 +2,16 @@
  &cntrl
    irest = 1, ntx = 5,                     ! restart and read velocities
    nstlim = 1000,                          ! simulation length (step limit)
-   dt = 0.001,                             ! integration time (ps)
-   ntpr = 500, ntwx = 500,                 ! print freq of energy and coordinats
-   ntwr = 1000,                            ! print freq of restart (will always print at end)
-   ioutfm = 1,                             ! flag for binary coordinates              
+   ntpr = 500, ntwx = 500,                 ! print freq of energy and coords
+   ioutfm = 1,                             ! use binary trajectory files  
    ntc = 2, ntf = 2, tol = 1e-8,           ! SHAKE for all bonds to hydrogen
-   ntt = 3, temp0 = 310.0, gamma_ln = 1.0, ! Langevin dynamics 
+   ntt = 3, temp0 = 310.0, gamma_ln = 5.0, ! Langevin dynamics 
+   ig = -1,                                ! use wallclock to seed random #'s
    igb = 2,                                ! OBC GB solvation 
-   tempi = 310.0,                          ! initial temp (for start only)
    nmropt = 1                              ! flag to read "nmr restraints"
  /
- &wt type='DUMPFREQ', istep1 = 1, / ! print frequency for restrained coordinates
+ &wt type='DUMPFREQ', istep1 = 500, / ! print frequency of restraint coords
  &wt type='END', /
- DISANG=DMP_US_@n@.RST
- DUMPAVE=DMP_US_@n@.TRACE
+ DISANG=DMP_US.RST
+ DUMPAVE=TRACE
  LISTIN=POUT
- LISTOUT=POUT
-

@@ -53,7 +53,7 @@ class async_re_job:
         Read keywords from control file. Requires the ConfigObj module
         """
         self.keywords = ConfigObj(self.command_file)
-        print self.keywords
+        #print self.keywords
         
 
     def _printStatus(self):
@@ -115,9 +115,16 @@ these and the other settings.
         if self.keywords.get('SPMD') is None: self.spmd = "single"
         else: self.spmd = self.keywords.get('SPMD')
         
-        #initializes extfiles variable for 'setupJob'
-        self.extfiles = None
+        #number of replicas (may be determined by other means)
+        if self.keywords.get('NREPLICAS') is not None:
+            self.nreplicas = int(self.keywords.get('NREPLICAS'))
+        else:
+            self.nreplicas = None
 
+        #initializes extfiles variable for 'setupJob'
+        self.extfiles = self.keywords.get('ENGINE_INPUT_EXTFILES')
+        if self.extfiles is not None and self.extfiles != '':
+            self.extfiles = self.extfiles.split(',')
 
     def setupJob(self):
         """

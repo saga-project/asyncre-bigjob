@@ -14,10 +14,10 @@ class bedam_async_re_job(pj_impact_job):
         if self.keywords.get('ENGINE') != 'IMPACT':
             self._exit("ENGINE is not IMPACT")
         #input files
-        self.extfiles = self.keywords.get('ENGINE_INPUT_EXTFILES')
-        if not (self.extfiles is None):
-            if self.extfiles != '':
-                self.extfiles = self.extfiles.split(',')
+        # self.extfiles = self.keywords.get('ENGINE_INPUT_EXTFILES')
+        # if not (self.extfiles is None):
+        #    if self.extfiles != '':
+        #        self.extfiles = self.extfiles.split(',')
         #list of lambdas
         if self.keywords.get('LAMBDAS') is None:
             self._exit("LAMBDAS needs to be specified")

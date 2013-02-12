@@ -1,19 +1,15 @@
-#! /usr/bin/env python
-################################################################################
-#                                                                              
-# FILE: AmberRestraint.py - plugin for AMBER nmropt style restraint files
-#
-# DESCRIPTION: This module provides a convenient implementation of restraints
-# in AMBER for use in Python. This is useful, for example, if one wants to
-# determine just the restraint energy of a set of coordinates without
-# running a full energy evaluation in AMBER.
-#
-# AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
-#
-# REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
-################################################################################
-from namelist import ReadNamelists
-import coordinates
+"""                                                                             
+FILE: rstr.py - plugin for AMBER nmropt style restraint files
+
+DESCRIPTION: This module provides a convenient implementation of restraints
+in AMBER for use in Python. This is useful, for example, if one wants to
+determine just the restraint energy of a set of coordinates without
+running a full energy evaluation in AMBER.
+
+AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
+
+REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
+"""
 from math import pi
 import sys
 
@@ -30,6 +26,7 @@ def ReadAmberRestraintFile(rstFilename):
     RETURN VALUES:
     amberRst - AmberRestraint object (list of NmroptRestraint)
     """
+    from namelist import ReadNamelists
     amberRst = AmberRestraint()
     # Read the namelists from the restraint file and look for &rst namelists
     namelists = ReadNamelists(rstFilename)
@@ -41,8 +38,7 @@ def ReadAmberRestraintFile(rstFilename):
                 raise Exception(msg)
             for key in floatKeys:
                 if key in nl.keys():
-                    if isinstance(nl[key],list):
-                        nl[key] = float(nl[key][0])
+                   nl[key] = float(nl[key])
             amberRst.append( NmroptRestraint(nl.pop('iat'),**nl) )
     if len(amberRst) < 1:
         raise Exception('No &rst namelists found in file: %s'%rstFilename)
@@ -67,7 +63,7 @@ class AmberRestraint(list):
         if hasattr(items, '__iter__'):
             for item in items:
                 self.append(item)
-                
+            
     def Energy(self,crds):
         """Calculate the total energy from all restraints.
 
@@ -294,6 +290,7 @@ class NmroptRestraint(object):
         r - the restraint coordinate (in Angstroms or radians)
         drdx - 3N list of cartesian gradients (unitless or radians/Angstrom)
         """
+        import coordinates
         r = 0.
         drdx = [ 0. for n in range(len(crds)) ]
         if self.rstType == 'Bond': 
