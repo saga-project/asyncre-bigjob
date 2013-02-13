@@ -2,7 +2,7 @@ import os, sys, random
 from pj_async_re import async_re_job
 import numpy as np
 from amberio.amberrun import ReadAmberGroupfile, AmberRun
-#import copy, math # only needed for debug
+import copy, math # only needed for debug
 
 __all__ = 'pj_amber_job, BOLTZMANN_CONSTANT'
 
@@ -237,12 +237,14 @@ class pj_amber_job(async_re_job):
    
     def _gibbs_re_j(self,i,replicas):
         # Select a replica swap partner based off independence sampling
-        ee = self._computeSwapMatrix(replicas)
+        ee = np.asarray(self._computeSwapMatrix(replicas),'float64')
         ps = np.zeros(len(replicas))
         for j in range(len(replicas)): ps[j] = -ee[i][j] + ee[i][i] + ee[j][j]
-        ps = np.exp(ps)
+        min = ps.min()
+        ps -= min
+        ps = np.exp(ps)*np.exp(min)
         return replicas[self._weighted_choice_sub(ps)]
-
+      
     def doExchanges(self):
         """
         Perform nreps rounds of exchanges among waiting replicas using 
@@ -262,7 +264,7 @@ class pj_amber_job(async_re_job):
             self.status[k]['cycle_current'] -= 1
             self.status[k]['running_status'] = "E"
 
-        nreps = 1000
+        nreps = 10
         npermt = {}
         permt = {}
         for reps in range(nreps):
@@ -276,54 +278,54 @@ class pj_amber_job(async_re_job):
                     self.status[repl_j]['stateid_current'] = sid_i
                     
         ###### DEBUG
-        #     curr_states = [ self.status[i]['stateid_current'] 
-        #                     for i in range(self.nreplicas) ]
-        #     curr_perm = str(zip(range(self.nreplicas),curr_states))
-        #     # e.g. '[(0,1), (1,2), (2,0)]'
+            curr_states = [ self.status[i]['stateid_current'] 
+                            for i in range(self.nreplicas) ]
+            curr_perm = str(zip(range(self.nreplicas),curr_states))
+            # e.g. '[(0,1), (1,2), (2,0)]'
 
-        #     if npermt.has_key(curr_perm):
-        #         npermt[curr_perm] += 1
-        #     else:
-        #         npermt[curr_perm] = 1
-        #         permt[curr_perm] = copy.copy(curr_states)
+            if npermt.has_key(curr_perm):
+                npermt[curr_perm] += 1
+            else:
+                npermt[curr_perm] = 1
+                permt[curr_perm] = copy.copy(curr_states)
 
-        # print ('Report for %d rounds of independence sampling of %d'
-        #        ' replicas'%(nreps,len(replicas_waiting)))
-        # print 'Swaps among replicas',replicas_waiting
-        # #for k in replicas_waiting:
-        # #    state = self.status[k]['stateid_current']
-        # #    print "Replica %d is now in state %d"%(k,state)
-        # #    self.umbrellas[state].PrintRestraintReport()
+        print ('Report for %d rounds of independence sampling of %d'
+               ' replicas'%(nreps,len(replicas_waiting)))
+        print 'Swaps among replicas',replicas_waiting
+        #for k in replicas_waiting:
+        #    state = self.status[k]['stateid_current']
+        #    print "Replica %d is now in state %d"%(k,state)
+        #    self.umbrellas[state].PrintRestraintReport()
 
-        # ss = 0 # total number of non-unique permutations
-        # for k in npermt.keys(): ss += npermt[k]
-        # ps = []
-        # sumps = 0
-        # for k in npermt.keys():
-        #     b = permt[k] # the state list of all replicas
-        #     e = 0
-        #     for i in replicas_waiting: e += self._reduced_energy(b[i],i)
-        #     p = math.exp(-e)
-        #     ps.append(p)
-        #     sumps += p
-        # i = 0
-        # sum1 = 0.
-        # sum2 = 0.
-        # DKL = 0.
-        # print 'empirical exact   %diff state permutation'
-        # print '-----------------------------------'
-        # for k in npermt.keys():
-        #     emp = npermt[k] / float(ss)
-        #     exa = ps[i]/sumps
-        #     pdiff = (emp-exa)*100/exa
-        #     print '%8.6f %8.6f %5.1f %s'%(emp,exa,pdiff,str(k))
-        #     i += 1
-        #     sum1 += emp
-        #     sum2 += exa
-        #     DKL += emp*math.log(emp/exa)
-        # print '-----------------------------------'
-        # print '%8.6f %8.6f (sum)'%(sum1,sum2)
-        # print 'Kullback-Liebler Divergence =',DKL
+        ss = 0 # total number of non-unique permutations
+        for k in npermt.keys(): ss += npermt[k]
+        ps = []
+        sumps = 0
+        for k in npermt.keys():
+            b = permt[k] # the state list of all replicas
+            e = 0
+            for i in replicas_waiting: e += self._reduced_energy(b[i],i)
+            p = math.exp(-e)
+            ps.append(p)
+            sumps += p
+        i = 0
+        sum1 = 0.
+        sum2 = 0.
+        DKL = 0.
+        print 'empirical exact   %diff state permutation'
+        print '-----------------------------------'
+        for k in npermt.keys():
+            emp = npermt[k] / float(ss)
+            exa = ps[i]/sumps
+            pdiff = (emp-exa)*100/exa
+            print '%8.6f %8.6f %5.1f %s'%(emp,exa,pdiff,str(k))
+            i += 1
+            sum1 += emp
+            sum2 += exa
+            DKL += emp*math.log(emp/exa)
+        print '-----------------------------------'
+        print '%8.6f %8.6f (sum)'%(sum1,sum2)
+        print 'Kullback-Liebler Divergence =',DKL
         #######
 
         # write input files

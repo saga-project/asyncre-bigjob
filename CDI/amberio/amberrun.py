@@ -91,10 +91,7 @@ class AmberRun(object):
         if self.mdin.GetVariableValue('irest','cntrl') == 1: 
             self.isRestart = True
         # NMRopt restraints
-        rstr_file = self.mdin.GetVariableValue('DISANG',None)
-        trace_file = self.mdin.GetVariableValue('DUMPAVE',None)
-        print_step = self.mdin.GetVariableValue('istep1','wt',"'DUMPFREQ'")
-        self.AddRestraints(rstr_file,trace_file,print_step)
+        self.AddRestraints(self.mdin.GetVariableValue('DISANG',None))
         # If requested, set the basename of all output files.
         if basename is not None: self.SetBasename(basename)
     
@@ -121,9 +118,14 @@ class AmberRun(object):
                 args += [self.file_flags[file],self.filenames[file]]
         return args
 
-    def AddRestraints(self, rstr_file, trace_file='fort.35', print_step=0):
+    def AddRestraints(self, rstr_file, trace_file=None, print_step=None):
         try:
             from rstr import ReadAmberRestraintFile
+            if trace_file is None:
+                trace_file = self.mdin.GetVariableValue('DUMPAVE',None)
+            if print_step is None:
+                print_step = self.mdin.GetVariableValue('istep1','wt',
+                                                        "'DUMPFREQ'")
             self.mdin.AddRestraints(rstr_file,trace_file,print_step)
             self.rstr = ReadAmberRestraintFile(rstr_file)
         except IOError:

@@ -60,7 +60,9 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         # based on the input,
         # NB: For simplicity, hardcode all restraint files to have the same 
         #     name. Each replica will simply overwrite this file at each cycle.
-        for state in self.states: state.mdin.AddRestraints('US.RST')
+        for state in self.states:
+            state.AddRestraints(restraint_template)
+            state.mdin.SetVariableValue('DISANG','US.RST',None)
         bias_dimensions = len(kbias[:][0])
         for n in range(self.nreplicas):
             for m in range(bias_dimensions): 
