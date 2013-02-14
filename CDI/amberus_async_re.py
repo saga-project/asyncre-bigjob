@@ -97,37 +97,23 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         """
         sid_a = self.status[repl_a]['stateid_current']
         sid_b = self.status[repl_b]['stateid_current']
-            
-        # extract the latest configuration and state information 
-        crds_a = self._extractLastCoordinates(repl_a)
-        crds_b = self._extractLastCoordinates(repl_b)
-        umbrella_a = self.states[sid_a].rstr
-        umbrella_b = self.states[sid_b].rstr
-
+           
         # do the energy evaluations
-        u_aa = umbrella_a.Energy(crds_a)
-        u_ab = umbrella_a.Energy(crds_b)
-        u_ba = umbrella_b.Energy(crds_a)
-        u_bb = umbrella_b.Energy(crds_b)
-        delta = (u_ab + u_ba) - (u_aa + u_bb)
-        u = self.beta*delta
-       
-        # test for and perform the exchange
-        Exchange = True
-        P_ab = 1.
-        csi = 0.
-        if u > 0.:
-            csi = random.random()
-            P_ab = math.exp(-u)
-            if csi > P_ab: Exchange = False
-        if Exchange:
-            sid_a = self.status[repl_a]['stateid_current']
-            sid_b = self.status[repl_b]['stateid_current']
-            self.status[repl_a]['stateid_current'] = sid_b
-            self.status[repl_b]['stateid_current'] = sid_a
+        u_aa = self._reduced_energy(sid_a,repl_a)
+        u_bb = self._reduced_energy(sid_b,repl_b)
+        u_ab = self._reduced_energy(sid_a,repl_b)
+        u_ba = self._reduced_energy(sid_b,repl_a)
 
+        # test for and perform the exchange
+        Exchange = pj_amber_job.ReplicaExchange(u_aa,u_bb,u_ab,u_ba)
+        if Exchange: 
+            self._swapStates(repl_a,repl_b)
         if self.keywords.get('VERBOSE') == 'yes':
             # extract the actual coordinates for reporting purposes
+            crds_a = self._extractLastCoordinates(repl_a)
+            crds_b = self._extractLastCoordinates(repl_b)
+            umbrella_a = self.states[sid_a].rstr
+            umbrella_b = self.states[sid_b].rstr
             print ('======================================================='
                    '=========================')
             print 'Exchange Attempt : Replicas (%d,%d)'%(repl_a,repl_b)
@@ -139,51 +125,51 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
             umbrella_b.PrintRestraintEnergyReport(crds_b)
             print ('======================================================='
                    '=========================')
-            print 'U_a(x_b) - U_a(x_a) + U_b(x_a) - U_b(x_b) = %f kcal/mol'%delta
+            delta = (u_ab + u_ba) - (u_aa + u_bb)
+            print ('U_a(x_b) - U_a(x_a) + U_b(x_a) - U_b(x_b) = %f kcal/mol'
+                   %delta)
             if Exchange:
-                print 'Accepted! P(a<->b) = %f >= %f'%(P_ab,csi)
+                print 'Accepted!'
                 print ('New states for replicas (%s,%s) are (%s,%s)'
                        %(repl_a,repl_b,
                          self.status[repl_a]['stateid_current'], 
                          self.status[repl_b]['stateid_current']))
             else:
-                print 'Rejected! P(a<->b) = %f < %f'%(P_ab,csi)
+                print 'Rejected!'
             print ('======================================================='
                    '=========================')
          
-    def _computeSwapMatrix(self,replicas):
+    def _computeSwapMatrix(self,replicas,states):
         """
-        Compute the swap matrix U = (u_ij):
-        u_ij = u_i(x_i) (i == j) and u_i(x_j) + u_j(x_i) (i != j)
+        Compute the swap matrix U = (u_ij), where u_ij = u_i(x_j)
        
         Here it is assumed that u_i(x) = beta[U_0(x) + U_i(x)], so that 
         differences of the matrix elements only involve the bias potentials U_i:
         
-        u_ii + u_jj - u_ij = beta[U_0(x_i) + U_i(x_i)] 
-                             + beta[U_0(x_j) + U_j(x_j)]
-                             - beta[U_0(x_j) + U_i(x_j)]
-                             - beta[U_0(x_i) + U_j(x_i)]
-                           =  beta[U_i(x_i) + U_i(x_j) - U_i(x_j) - U_j(x_i)]
+        u_ii + u_jj - u_ij - u_ji 
+                     = beta[U_0(x_i) + U_i(x_i)] + beta[U_0(x_j) + U_j(x_j)]
+                       - beta[U_0(x_j) + U_i(x_j)] - beta[U_0(x_i) + U_j(x_i)]
+                     =  beta[U_i(x_i) + U_i(x_j) - U_i(x_j) - U_j(x_i)]
         """
-        # Compute all energies needed for permutation of replicas and states
-        nreplicas = len(replicas)
-        ee = [ [ 0. for j in range(nreplicas) ] for i in range(nreplicas) ]
+        # Compute the energy of the given replicas in the given states.
+
+        # ee will be sparse matrix, but is convenient bc the indices of the
+        # rows and columns will always be the same.
+        ee = [ [ 0. for j in range(self.nreplicas) ] 
+               for i in range(self.nreplicas) ]
+        crds = [ self._extractLastCoordinates(repl_i) for repl_i in replicas ]
         for i,repl_i in enumerate(replicas):
-            crds_i = self._extractLastCoordinates(repl_i)
-            # case repl_i = repl_j:
-            sid_i = self.status[repl_i]['stateid_current'] 
-            eii = self.beta*self.states[sid_i].rstr.Energy(crds_i)
-            ee[i][i] = eii
-            for j,repl_j in enumerate(replicas[0:i]): 
-                # case repl_i != repl_j:
-                sid_j = self.status[repl_j]['stateid_current'] 
-                eij = self.beta*self.states[sid_j].rstr.Energy(crds_i)
-                ee[i][j] += eij
-                ee[j][i] += eij
+            for sid_j in states:
+                # energy of replica i in state j
+                ee[sid_j][repl_i] = (self.beta 
+                                     * self.states[sid_j].rstr.Energy(crds[i]))
         return ee
 
     def _reduced_energy(self,state_i,replica_j):
-        # Return the reduced energy in state_i of crds from replica_j
+        """
+        Return the reduced energy of replica j in state i. 
+        NB: This is NOT the same as the current state of replica i.
+        """
         crds_j = self._extractLastCoordinates(replica_j)
         u_ij = self.states[state_i].rstr.Energy(crds_j)
         return self.beta*u_ij

@@ -51,6 +51,9 @@ class AmberRunCollection(list):
             for item in items:
                 self.append(item)
 
+    def SetEngine(self, engine):
+        for run in self: run.SetEngine(engine)
+
 class AmberRun(object):
     """
     An AMBER run is mostly defined by its input files (e.g. mdin, prmtop) but 
@@ -61,10 +64,12 @@ class AmberRun(object):
 
     (see mdin.py and rstr.py for details of these object)
     """
-    def __init__(self,mode=None,basename=None,**filenames):
+    def __init__(self,mode=None,basename=None,engine='sander',**filenames):
         import copy
         from mdin import ReadAmberMdinFile
-        self.mode = mode
+        # ==================================
+        # Dictionaries for referencing files 
+        # ==================================
         # Input flags (used to write arguments)
         self.file_flags = {'mdin' : '-i', 'mdout' : '-o',
                            'prmtop' : '-p', 'inpcrd' : '-c', 
@@ -75,6 +80,9 @@ class AmberRun(object):
                                   'prmtop' : 'prmtop', 'inpcrd' : 'inpcrd', 
                                   'restrt' : 'restrt', 'ref' : 'refc', 
                                   'mdcrd' : 'mdcrd', 'mdinfo' : 'mdinfo'}
+        # ================================================
+        # Determine filenames and build file based objects
+        # ================================================
         self.filenames = copy.deepcopy(self.default_filenames)
         # Set new filenames as specified by the input.
         for file in filenames.keys():
@@ -92,9 +100,22 @@ class AmberRun(object):
             self.isRestart = True
         # NMRopt restraints
         self.AddRestraints(self.mdin.GetVariableValue('DISANG',None))
+        # ====================================================
+        # Additional parameters that are not filenames/objects
+        # ====================================================
+        # Set the file writing mode O(verwrite), A(ppend), or None
+        self.mode = mode
         # If requested, set the basename of all output files.
         if basename is not None: self.SetBasename(basename)
-    
+        # Set the MD engine (also effects defaults in mdin)
+        self.SetEngine(engine)
+
+    def SetEngine(self, engine):
+        """Set the MD engine (and all of the inherent defaults).
+        """
+        self.engine = engine
+        self.mdin.SetDefaults(engine)
+
     def SetBasename(self, basename):
         """Set the basename of all output files.
         """
@@ -134,3 +155,23 @@ class AmberRun(object):
             # (It might be a dummy file to establish the DISANG variable.)
             print ('WARNING! Unable to read AMBER restraint file: %s\n'
                    '         Continuing anyway...'%rstr_file)
+            
+    # def Energy(self, crd_file):
+    #     import tempfile,shutil,os,copy,commands
+    #     # - Make a temporary directory
+    #     # - Make a modified mdin object
+    #     # - Move to the tmp dir and get the exe and args
+    #     # - Call the MD engine
+    #     # - Parse the output and return the energy
+    #     cwd    = os.getcwd()
+    #     tmpdir = tempfile.mkdtemp(prefix='amber-snglpnt-')
+    #     os.chdir(tmpdir)
+    #     
+    #     snglpnt_mdin = copy.deepcopy(self.mdin)
+    #     snglpnt_mdin.
+    #   
+    #     os.chdir(cwd)
+    #     shutil.rmtree(tmpdir)
+
+        
+    #     return 0.

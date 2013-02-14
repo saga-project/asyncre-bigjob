@@ -22,6 +22,7 @@ except:
 
 # This definition uses values from sander/src/constants.F90
 BOLTZMANN_CONSTANT = 1.380658*6.0221367/4184 # in kcal/mol-K
+
 class pj_amber_job(async_re_job):
 
     def _checkInput(self):
@@ -53,19 +54,21 @@ class pj_amber_job(async_re_job):
             self._exit('Could not find an executable: %s\nExpected it to'
                        ' be at %s'%(engine_name,self.exe))
 
-        # ============================================
-        # Set up the general state/replica information
-        # ============================================
-        # If present, read the AMBER groupfile and define the states,
+        # ========================================================
+        # Set up the general state/replica information - 2 methods
+        # ========================================================
+        # (1) If present, read the AMBER groupfile and define the states,
         if self.keywords.get('AMBER_GROUPFILE') is not None:
             groupfile = self.keywords.get('AMBER_GROUPFILE')
             self.states = ReadAmberGroupfile(groupfile)
+            self.states.SetEngine(engine_name)
             self.nreplicas = len(self.states)
             if self.keywords.get('VERBOSE') == 'yes':
                 print ('Creating %d replicas from AMBER groupfile: %s'
                        %(self.nreplicas,groupfile))
-        # otherwise assume that the states can be inferred from the extfiles
-        # and input from a specific application (e.g. umbrella sampling).
+        # (2) otherwise assume that the states can be inferred from the
+        # extfiles and input from a specific application (e.g. umbrella 
+        # sampling).
         else:
             if self.nreplicas is None:
                 self._exit('Could not determine the replica count from the'
@@ -97,7 +100,6 @@ class pj_amber_job(async_re_job):
             # There's no way to delineate reference and input coordinates w/o
             # using a groupfile. Best guess is to assume they are the same.
             files['ref'] = files['inpcrd']
-
             # Give an error if no match of required files could be made.
             for file in exts.keys():
                 if files[file] is None:
@@ -107,9 +109,9 @@ class pj_amber_job(async_re_job):
             if self.keywords.get('VERBOSE') == 'yes':
                 print ('Creating %d replicas using the provided'
                        ' ENGINE_INPUT_EXTFILES'%self.nreplicas)
-            self.states = [ AmberRun(**files) for n in range(self.nreplicas) ]
-        # Set the inputfile defaults based on the MD engine
-        for state in self.states: state.mdin.SetDefaults(engine_name)
+            self.states = [ AmberRun(mode='-O',basename=self.basename,
+                                     engine=engine_name,**files) 
+                            for n in range(self.nreplicas) ]
 
     def _buildInpFile(self, replica):
         """
@@ -227,24 +229,72 @@ class pj_amber_job(async_re_job):
 # Work in Progress: Gibbs sampling style exchanges (see impact_async_re.py)
 #
 ###########################################################################
+    def _replicasWaiting(self):
+        # Return all replicas that are waiting AND have run at least once.
+        replicas_waiting = [ k for k in range(self.nreplicas)
+                             if ( self.status[k]['running_status'] == "W" 
+                                  and self.status[k]['cycle_current'] > 1 ) ]
+        return replicas_waiting
+
+    def _statesWaiting(self):
+        # Return all states occupied by replicas that are waiting AND have run
+        # at least once.
+        states_waiting = [ self.status[k]['stateid_current']
+                           for k in range(self.nreplicas)
+                           if ( self.status[k]['running_status'] == "W" 
+                                and self.status[k]['cycle_current'] > 1 ) ]
+        return states_waiting
+
     def _weighted_choice_sub(self,weights):
         # gives random choice from a set with weighted probabilities
-        rnd = random.random() * sum(weights)
+        rnd = random.random() #* sum(weights)
         for i, w in enumerate(weights):
             rnd -= w
             if rnd < 0:
                 return i
    
-    def _gibbs_re_j(self,i,replicas):
+    def _gibbs_re_j(self,repl_i,replicas,U):
         # Select a replica swap partner based off independence sampling
-        ee = np.asarray(self._computeSwapMatrix(replicas),'float64')
+        #
+        # Pswap = exp(-duij) / sum(exp(-duij))
+        ee = U
         ps = np.zeros(len(replicas))
-        for j in range(len(replicas)): ps[j] = -ee[i][j] + ee[i][i] + ee[j][j]
-        min = ps.min()
-        ps -= min
-        ps = np.exp(ps)*np.exp(min)
+        for repl_j in replicas: 
+            ps[j] = ee[i][i] + ee[j][j] - ee[i][j] - e[j][i]
+        ps = np.exp(-ps)
+        ps /= ps.sum()
         return replicas[self._weighted_choice_sub(ps)]
       
+    @staticmethod
+    def MetropolisAcceptance(du):
+        """
+        Return whether a Monte Carlo move is accepted or not based off of the
+        Metropolis criteria:
+
+        P_accept = min{1,exp(-du)}
+
+        where du = u_new - u_old is the difference in the new and old
+        REDUCED (i.e. in kT units) energy difference.
+        """
+        acceptMove = True
+        if du > 0.:
+            Pacc = math.exp(-du)
+            rand = random.random()
+            if rand > Pacc: 
+                acceptMove = False
+        return acceptMove
+
+    @staticmethod
+    def ReplicaExchange(u11,u22,u12,u21):
+        du = u12 + u21 - u11 - u22
+        return pj_amber_job.MetropolisAcceptance(du)
+
+    def _swapStates(self,repl_a,repl_b):
+        sid_a = self.status[repl_a]['stateid_current']
+        sid_b = self.status[repl_b]['stateid_current']
+        self.status[repl_a]['stateid_current'] = sid_b
+        self.status[repl_b]['stateid_current'] = sid_a
+
     def doExchanges(self):
         """
         Perform nreps rounds of exchanges among waiting replicas using 
@@ -252,80 +302,117 @@ class pj_amber_job(async_re_job):
         """
         # find out which replicas are waiting
         self._update_running_no()
-        if self.waiting > 1:
-            replicas_waiting = []
-            for k in range(self.nreplicas):
-                if ( self.status[k]['running_status'] == "W" 
-                     and self.status[k]['cycle_current'] > 1 ):
-                    replicas_waiting.append(k)
+        replicas_waiting = self._replicasWaiting()
+        # If not enough replicas are available, exit (this shouldn't happen
+        # a lot in practice if lots of replicas are running).
+        # if self.waiting < 2: return 0
+        if len(replicas_waiting) < 2: return 0
 
         # backtrack cycle
         for k in replicas_waiting:
             self.status[k]['cycle_current'] -= 1
             self.status[k]['running_status'] = "E"
 
-        nreps = 10
+        # Chodera and Shirts suggested that K^3-K^5 iterations of random pairs
+        # should approach independence sampling. For tests of up to 4 replicas,
+        # the similarity of the empirical and exact distribution are
+        # similar with a Kullback-Liebler divergence on the order of 0.1 or 
+        # less.
+        nwaiting = len(replicas_waiting)
+        nreps = nwaiting**4
         npermt = {}
         permt = {}
+        states_waiting = self._statesWaiting()
+        U = self._computeSwapMatrix(replicas_waiting,states_waiting)
+        # Remember that U is nreplicas x nreplicas with rows corresponding
+        # to the replica ids and columns corresponding to the STATIC state
+        # ids (state id and replica id can and will be different)
         for reps in range(nreps):
-            for i,repl_i in enumerate(replicas_waiting):
-                repl_j = self._gibbs_re_j(i,replicas_waiting)
-                if repl_i != repl_j:
-                    #swap state id's
-                    sid_i = self.status[repl_i]['stateid_current'] 
+            #
+            # Independence sampling type swaps
+            #
+            for repl_i in replicas_waiting:
+                sid_i = self.status[repl_i]['stateid_current']
+                ps = np.zeros(nwaiting)
+                for j,repl_j in zip(range(nwaiting),replicas_waiting):
                     sid_j = self.status[repl_j]['stateid_current']
-                    self.status[repl_i]['stateid_current'] = sid_j
-                    self.status[repl_j]['stateid_current'] = sid_i
-                    
+                    ps[j] = ( U[sid_i][repl_i] + U[sid_j][repl_j] 
+                              - U[sid_i][repl_j] - U[sid_j][repl_i] )
+                    ps = np.exp(-ps)
+                    ps /= ps.sum()
+                    repl_j = replicas_waiting[self._weighted_choice_sub(ps)]
+                    if repl_i != repl_j:
+                        self._swapStates(repl_i,repl_j)
+            #
+            # Traditional Metropolis type swaps
+            #
+            # repl_i,repl_j = random.sample(replicas_waiting,2)
+            # sid_i = self.status[repl_i]['stateid_current']
+            # sid_j = self.status[repl_j]['stateid_current']
+            # exchange = pj_amber_job.ReplicaExchange(U[sid_i][repl_i],
+            #                                         U[sid_j][repl_j],
+            #                                         U[sid_i][repl_j],
+            #                                         U[sid_j][repl_i])
+            # if exchange: self._swapStates(repl_i,repl_j)
         ###### DEBUG
+            # list of current states of ALL replicas
             curr_states = [ self.status[i]['stateid_current'] 
-                            for i in range(self.nreplicas) ]
-            curr_perm = str(zip(range(self.nreplicas),curr_states))
+                            for i in replicas_waiting ]
+            # list of tuples of replicas and stateids
             # e.g. '[(0,1), (1,2), (2,0)]'
-
+            curr_perm = str(zip(replicas_waiting,curr_states))
+           
+            # If the permutation has been observed, add a count 
             if npermt.has_key(curr_perm):
                 npermt[curr_perm] += 1
+            # otherwise add this permutation and store it as a possibility
             else:
                 npermt[curr_perm] = 1
                 permt[curr_perm] = copy.copy(curr_states)
 
         print ('Report for %d rounds of independence sampling of %d'
                ' replicas'%(nreps,len(replicas_waiting)))
-        print 'Swaps among replicas',replicas_waiting
-        #for k in replicas_waiting:
-        #    state = self.status[k]['stateid_current']
-        #    print "Replica %d is now in state %d"%(k,state)
-        #    self.umbrellas[state].PrintRestraintReport()
+        print ('Swaps among replicas %s in states %s N! = %d permutations'
+               %(str(replicas_waiting),str(curr_states),
+                 math.factorial(len(replicas_waiting))))
 
-        ss = 0 # total number of non-unique permutations
-        for k in npermt.keys(): ss += npermt[k]
-        ps = []
+        from itertools import permutations
+        emp  = []
+        exact = []
         sumps = 0
-        for k in npermt.keys():
-            b = permt[k] # the state list of all replicas
+        ss = 0
+        for state_perm in permutations(curr_states):
+            perm = str(zip(replicas_waiting,state_perm))
+            # emperical distribution observed here
+            if npermt.has_key(perm):
+                emp.append(npermt[perm])
+                ss += npermt[perm]
+            else:
+                emp.append(0.)
+            # exact boltzmann weight of all permutations
             e = 0
-            for i in replicas_waiting: e += self._reduced_energy(b[i],i)
+            for i,j in zip(replicas_waiting,state_perm):
+                e += self._reduced_energy(j,i)
             p = math.exp(-e)
-            ps.append(p)
+            exact.append(p)
             sumps += p
-        i = 0
+        exact = [ p / sumps for p in exact ]
+        emp   = [ float(p) / ss for p in emp ]
         sum1 = 0.
         sum2 = 0.
         DKL = 0.
-        print 'empirical exact   %diff state permutation'
-        print '-----------------------------------'
-        for k in npermt.keys():
-            emp = npermt[k] / float(ss)
-            exa = ps[i]/sumps
-            pdiff = (emp-exa)*100/exa
-            print '%8.6f %8.6f %5.1f %s'%(emp,exa,pdiff,str(k))
-            i += 1
-            sum1 += emp
-            sum2 += exa
-            DKL += emp*math.log(emp/exa)
-        print '-----------------------------------'
-        print '%8.6f %8.6f (sum)'%(sum1,sum2)
-        print 'Kullback-Liebler Divergence =',DKL
+        print '   empirical exact   %diff state permutation'
+        print '--------------------------------------'
+        for k,state_perm in enumerate(permutations(curr_states)):
+            perm = str(zip(replicas_waiting,state_perm))
+            pdiff = (emp[k]-exact[k])*100/exact[k]
+            print '%2d %8.6f %8.6f %6.1f %s'%(k+1,emp[k],exact[k],pdiff,perm)
+            sum1 += emp[k]
+            sum2 += exact[k]
+            if emp[k] > 0.: DKL += emp[k]*math.log(emp[k]/exact[k])
+        print '--------------------------------------'
+        print ('   %8.6f %8.6f (sum) Kullback-Liebler Divergence = %f'
+               %(sum1,sum2,DKL))
         #######
 
         # write input files
@@ -335,3 +422,5 @@ class pj_amber_job(async_re_job):
             self.status[k]['cycle_current'] += 1
             self._buildInpFile(k)
             self.status[k]['running_status'] = "W"
+            
+        return 1
