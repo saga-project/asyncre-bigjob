@@ -104,19 +104,38 @@ at each time step and puts into a big table
         
     def _hasCompleted(self,replica,cycle):
         """
-Returns true if an IMPACT replica has completed a cycle. Basically checks
-if the restart file exists.
+Returns true if an IMPACT replica has successfully completed a cycle.
 """
-        rstfile = "r%d/%s_%d.rst" % (replica, self.basename,cycle)
-        if os.path.exists(rstfile):
-            return True
-        else:
+        try:
+            #check existence of rst file
+            rstfile = "r%d/%s_%d.rst" % (replica, self.basename,cycle)
+            if not os.path.exists(rstfile):
+                print "Warning: can not find file %s." % rstfile 
+                return False
+            #check that rst file is of the correct size
+            if cycle > 1:
+                rstfile_p = "r%d/%s_%d.rst" % (replica, self.basename,cycle-1)
+                rstsize = os.path.getsize(rstfile)
+                rstsize_p = os.path.getsize(rstfile_p)
+                if not rstsize == rstsize_p:
+                    print "Warning: files %s and %s have different size" % (rstfile,rstfile_p)
+                    return False
+            #check that we can read data from .out
+            output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
+            datai = self._getImpactData(output_file)
+            nf = len(datai[0])
+            nr = len(datai)
+        except:
+            rstfile = "r%d/%s_%d.rst" % (replica, self.basename,cycle)
+            rstfile_p = "r%d/%s_%d.rst" % (replica, self.basename,cycle-1)
+            output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
+            print "Warning: unable to access some of these files: %s %s %s." % (rstfile,rstfile_p,output_file)
             return False
+        return True
 
 #
 # Experimental Gibbs sampling for RE
 #
-
 
 # gives random choice from a set with weight probabilities
     def _weighted_choice_sub(self,weights):
