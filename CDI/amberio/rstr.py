@@ -1,19 +1,15 @@
-#! /usr/bin/env python
-################################################################################
-#                                                                              
-# FILE: AmberRestraint.py - plugin for AMBER nmropt style restraint files
-#
-# DESCRIPTION: This module provides a convenient implementation of restraints
-# in AMBER for use in Python. This is useful, for example, if one wants to
-# determine just the restraint energy of a set of coordinates without
-# running a full energy evaluation in AMBER.
-#
-# AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
-#
-# REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
-################################################################################
-from namelist import ReadNamelists
-import coordinates
+"""                                                                             
+FILE: rstr.py - plugin for AMBER nmropt style restraint files
+
+DESCRIPTION: This module provides a convenient implementation of restraints
+in AMBER for use in Python. This is useful, for example, if one wants to
+determine just the restraint energy of a set of coordinates without
+running a full energy evaluation in AMBER.
+
+AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
+
+REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
+"""
 from math import pi
 import sys
 
@@ -30,6 +26,7 @@ def ReadAmberRestraintFile(rstFilename):
     RETURN VALUES:
     amberRst - AmberRestraint object (list of NmroptRestraint)
     """
+    from namelist import ReadNamelists
     amberRst = AmberRestraint()
     # Read the namelists from the restraint file and look for &rst namelists
     namelists = ReadNamelists(rstFilename)
@@ -41,8 +38,7 @@ def ReadAmberRestraintFile(rstFilename):
                 raise Exception(msg)
             for key in floatKeys:
                 if key in nl.keys():
-                    if isinstance(nl[key],list):
-                        nl[key] = float(nl[key][0])
+                   nl[key] = float(nl[key])
             amberRst.append( NmroptRestraint(nl.pop('iat'),**nl) )
     if len(amberRst) < 1:
         raise Exception('No &rst namelists found in file: %s'%rstFilename)
@@ -67,7 +63,7 @@ class AmberRestraint(list):
         if hasattr(items, '__iter__'):
             for item in items:
                 self.append(item)
-                
+            
     def Energy(self,crds):
         """Calculate the total energy from all restraints.
 
@@ -185,15 +181,15 @@ class NmroptRestraint(object):
     ----
 
     Frequently one only desires a purely harmonic well, in which case r1 << r2,
-    r2=r3, r3 << r4, and rk2 = rk4. These defaults can be obtained by only
-    specifying r2 and rk2.
+    r2=r3, r3 << r4, and rk2 = rk3. These defaults can be obtained by only
+    specifying r0 and k0 (as in sander from AMBER 10 onward).
 
     REQUIRED ARGUMENTS:
     iat - list of atom indices defining the restraint
 
     OPTIONAL ARGUMENTS:
-    r1,r2,r3,r4 - restraint positions (see above)
-    rk2,rk3 - restraint force constants (see above)
+    rstr_params - any of r0, r1, r2, r3, r4, k0, rk2, and rk3 can be set by
+    direct assignment. r0 and k0 will override all other specifications.
 
     NB: As in AMBER, angle positions are in degrees while angle force constants
     are in radians. Distances are always in Angstroms.
@@ -205,7 +201,7 @@ class NmroptRestraint(object):
         if 'rstwt' in rstr_params.keys(): 
             self.rstwt = tuple(rstr_params['rstwt'])
             self.rstType = 'Gen. Dist. Coord.'
-            if len(self.rstwt) != nAtoms/2:
+            if len(self.rstwt) != self.nAtoms/2:
                 msg = ('Not enough rstwt values provided for %d atom Gen. Dist.'
                        ' Coord. Expected %d, but got %d.'%(self.nAtoms,
                                                            self.nAtoms/2,
@@ -225,6 +221,8 @@ class NmroptRestraint(object):
         self.SetRestraintParameters(**rstr_params)
         
     def SetRestraintParameters(self,**rstr_params):
+        """Set any of r0, r1, r2, r3, r4, k0, rk2, and rk3 by assignment.
+        """
         # A pure harmonic restraint can be set with just r0,
         if 'r0' in rstr_params.keys(): 
             r0 = float(rstr_params['r0'])
@@ -236,7 +234,7 @@ class NmroptRestraint(object):
                 self.r[0] = 0.
                 self.r[3] = r0 + 180.
             else: # all distance restraints
-                self.r[0] = 0.
+                self.r[0] = r0 - 500.
                 self.r[3] = r0 + 500.
         # otherwise the four positions need to be set individually.
         else:
@@ -292,26 +290,20 @@ class NmroptRestraint(object):
         r - the restraint coordinate (in Angstroms or radians)
         drdx - 3N list of cartesian gradients (unitless or radians/Angstrom)
         """
+        import coordinates
         r = 0.
         drdx = [ 0. for n in range(len(crds)) ]
         if self.rstType == 'Bond': 
             i = self.iat[0] - 1
             j = self.iat[1] - 1
-            drdxi = [ 0., 0., 0.]
-            drdxj = [ 0., 0., 0.]
-            #r = coordinates.BondAndGradients(crds,i,j,drdxi,drdxj)
-            r = coordinates.Bond(crds,i,j)
+            r,drdxi,drdxj = coordinates.BondAndGradients(crds,i,j)
             drdx[3*i:3*(i+1)] = drdxi
             drdx[3*j:3*(j+1)] = drdxj
         elif self.rstType == 'Angle':
             i = self.iat[0] - 1
             j = self.iat[1] - 1
             k = self.iat[2] - 1
-            drdxi = [ 0., 0., 0.]
-            drdxj = [ 0., 0., 0.]
-            drdxk = [ 0., 0., 0.]
-            #r = coordinates.AngleAndGradients(crds,i,j,k,drdxi,drdxj,drdxk)
-            r = coordinates.Angle(crds,i,j,k)
+            r,drdxi,drdxj,drdxk = coordinates.AngleAndGradients(crds,i,j,k)
             drdx[3*i:3*(i+1)] = drdxi
             drdx[3*j:3*(j+1)] = drdxj
             drdx[3*k:3*(k+1)] = drdxk
@@ -320,12 +312,8 @@ class NmroptRestraint(object):
             j = self.iat[1] - 1
             k = self.iat[2] - 1
             l = self.iat[3] - 1
-            drdxi = [ 0., 0., 0.]
-            drdxj = [ 0., 0., 0.]
-            drdxk = [ 0., 0., 0.]
-            drdxl = [ 0., 0., 0.]
-            #r = coordinates.DihedralAndGradients(crds,i,j,k,l,drdxi,drdxj,drdxk,drdxl)
-            r = coordinates.Dihedral(crds,i,j,k,l)
+            r,drdxi,drdxj,drdxk,drdxl = (
+                coordinates.DihedralAndGradients(crds,i,j,k,l) )
             drdx[3*i:3*(i+1)] = drdxi
             drdx[3*j:3*(j+1)] = drdxj
             drdx[3*k:3*(k+1)] = drdxk
@@ -334,10 +322,8 @@ class NmroptRestraint(object):
             for k in range(len(self.rstwt)):
                 i = self.iat[2*k+0] - 1
                 j = self.iat[2*k+1] - 1
-                drdxi = [ 0., 0., 0.]
-                drdxj = [ 0., 0., 0.]
-                #r += self.rstwt[k]*coordinates.BondAndGradients(crds,i,j,drdxi,drdxj)
-                r += self.rstwt[k]*coordinates.Bond(crds,i,j)
+                x,drdxi,drdkj = coordinates.BondAndGradients(crds,i,j)
+                r += self.rstwt[k]*x
                 for m in range(3):
                     drdx[3*i+m] += self.rstwt[k]*drdxi[m]
                     drdx[3*j+m] += self.rstwt[k]*drdxj[m]

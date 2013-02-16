@@ -1,118 +1,13 @@
 # File Based Replica Exchange class
 """A module to prepare and run file-based asynchronous RE jobs
+See documentation in doc/ directory.
 
 Contributors: 
 
 Emilio Gallicchio <emilio.gallicchio@rutgers.edu>
+Brian Radak <radakb@biomaps.rutgers.edu>
 Melissa Romanus <melissa.romanus@rutgers.edu>
 Brian Radak <radakb@biomaps.rutgers.edu>
-
-Approach:
-
-1. A set of subjobs (replicas) are set up by using MD engine input
-   files derived from template input files and a list of thermodynamic
-   settings which distinguish one replica from another. Template input
-   files are assumed to exist in the working directory. Each replica
-   is set up into its own sub-directory of the working directory named
-   r0, r1, ..., r<M-1>, where M is the number of replicas.
-
-2. Periodically a subset of the replicas is launched on remote
-   execution hosts specified by a nodefile and enter a "R" (running)
-   state. When a replica completes a run (of length specified in the
-   MD engine input file), referred to in the code as a "cycle", it
-   enters a "W" (wait) state which makes it eligible for exchange of
-   thermodynamic parameters with other replicas and the initiation of
-   a new run cycle.
-
-3. Periodically exchanges of thermodynamic parameters are attempted
-   between randomly picked pairs of replicas in the wait state based
-   on the appropriate replica exchange rules, which are implemented
-   based on their thermodynamic settings (temperature, for example)
-   and their current structural and energetic information obtained
-   from the MD engine output files.
-
-Execution:
-
-#!/bin/bash
-ASYNCRE_DIR=<directory where async_re.py is installed>
-export PYTHONPATH=$ASYNCRE_DIR:$ASYNCRE_DIR/configobj-4.7.2:$PYTHONPATH
-python $ASYNCRE_DIR/async_re.py command_file.inp > LOG 2>&1 &
-
-where 'command_file.inp' is a keyword=value input file described
-below.  Execution terminates after a specified amount of wall-clock
-time (see below). Internal state is saved periodically and at the end
-of execution so that is can be restarted at a later time (see below)
-
-Module requirements: 
-
-pickle, ConfigObj 
-
-Command file:
-
-The command file file lists "keyword=value" items. For example:
-
-NODEFILE = 'nodefile' 
-walltime = 300
-ENGINE = 'IMPACT'
-RE_TYPE = 'BEDAM'
-RE_SETUP = 'yes'
-ENGINE_INPUT_BASENAME = 'hg'
-ENGINE_INPUT_EXTFILES = 'heptanoate_rcpt_restr.maegz,heptanoate.maegz,heptanoate_cmrestraint.dat,hg_0.rst,agbnp2.param'
-LAMBDAS = '0.04,0.07,0.1,0.25,0.35,0.45,0.55,0.65,0.71,0.78,0.85,1.0'
-BEDAM_TEMPERATURE = 300.0
-
-  NODEFILE: (required) a list of remote execution hosts one per
-  line. Pass-wordless ssh required. Also assumes a uniform filesystem
-  on the local host and the remote execution hosts.
-
-  walltime: (required) execution time in seconds. After walltime seconds the
-  application exits. Launched jobs will continue to run to completion.
-
-  ENGINE: (required) MD engine program. Only 'IMPACT' is currently
-  supported.
-
-  RE_TYPE: (required) Replica exchange application. Only 'BEDAM'
-  (Hamiltonian RE for binding free energy calculations) is currently
-  supported.
-
-  RE_SETUP: (defaults to 'no') whether to setup a new RE
-  simulation. 'no' is used to restart a previously interrupted RE job.
-
-  ENGINE_INPUT_BASENAME: (required) basename of the job, used to
-  locate the engine input file and associated files (for IMPACT the
-  input file is BASENAME.inp), and to write the status files
-  (BASENAME.stat and BASENAME_stat.txt).
-
-  ENGINE_INPUT_EXTFILES: list of structure files etc. that are copied
-  from working directory to the replicas directories to start each
-  replica.
-
-  LAMBDAS, BEDAM_TEMPERATURE: BEDAM-specific settings, there's one
-  element in LAMBDA for each replica.  For other applications some
-  other quantity (such as TEMPERATURE) would distinguish one replica
-  from another.
-
-Constructor:
-
-  rx = async_re_job(commandFile, options=None)
-
-Public functions:
-
-setupJob()
-updateStatus()
-print_status()
-launchJobs()
-doExchanges()
-
-Functions that need to be specialized for each supported MD engine/RE
-application combination:
-
-_buildInpFile()
-_isDone()
-_launchReplica()
-_doExchange_pair()
-
-all the other methods apply generically to all engine/application types.
 
 """
 
@@ -158,7 +53,7 @@ class async_re_job:
         Read keywords from control file. Requires the ConfigObj module
         """
         self.keywords = ConfigObj(self.command_file)
-        print self.keywords
+        #print self.keywords
         
 
     def _printStatus(self):
@@ -219,18 +114,17 @@ these and the other settings.
 
         if self.keywords.get('SPMD') is None: self.spmd = "single"
         else: self.spmd = self.keywords.get('SPMD')
-        #self.spmd = self.keywords.get('SPMD')
-        #if self.spmd is None: self.spmd="single"
-        #    if int(self.keywords.get('SUBJOB_CORES')) == 1: 
-        #        self.spmd="single"
-        #    elif int(self.keywords.get('SUBJOB_CORES')) > 1: 
-        #        self.spmd="mpi"
-        #    else: 
-        #        self._exit("SUBJOB_CORES needs to be non-zero and positive")
         
-        #initializes extfiles variable for 'setupJob'
-        self.extfiles = None
+        #number of replicas (may be determined by other means)
+        if self.keywords.get('NREPLICAS') is not None:
+            self.nreplicas = int(self.keywords.get('NREPLICAS'))
+        else:
+            self.nreplicas = None
 
+        #initializes extfiles variable for 'setupJob'
+        self.extfiles = self.keywords.get('ENGINE_INPUT_EXTFILES')
+        if self.extfiles is not None and self.extfiles != '':
+            self.extfiles = self.extfiles.split(',')
 
     def setupJob(self):
         """
