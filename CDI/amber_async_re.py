@@ -27,7 +27,10 @@ class pj_amber_job(async_re_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
-            
+        
+        self.verbose = False
+        if self.keywords.get('VERBOSE') == "yes": self.verbose = True
+        
         # ===========================
         # Set up the AMBER executable
         # ===========================
@@ -63,7 +66,7 @@ class pj_amber_job(async_re_job):
             self.states = ReadAmberGroupfile(groupfile)
             self.states.SetEngine(engine_name)
             self.nreplicas = len(self.states)
-            if self.keywords.get('VERBOSE') == 'yes':
+            if self.verbose:
                 print ('Creating %d replicas from AMBER groupfile: %s'
                        %(self.nreplicas,groupfile))
         # (2) otherwise assume that the states can be inferred from the
@@ -106,7 +109,7 @@ class pj_amber_job(async_re_job):
                     self._exit('Could not identify a(n) %s file based on the'
                                ' given input!'%file)
             # Define states with these file names
-            if self.keywords.get('VERBOSE') == 'yes':
+            if self.verbose:
                 print ('Creating %d replicas using the provided'
                        ' ENGINE_INPUT_EXTFILES'%self.nreplicas)
             self.states = [ AmberRun(mode='-O',basename=self.basename,
@@ -144,49 +147,43 @@ class pj_amber_job(async_re_job):
                                   replica)
 
     def _launchReplica(self,replica,cycle):
-        """Launch an AMBER sub-job using pilot-job. The input files for AMBER
-        that define a state are assumed to be the default names mdin, prmtop, 
-        and refc. Those files are simply re-written or symlinked to.
-
-        (see _buildInpFile)
         """
-        stateid = self.status[replica]['stateid_current']
-        self.states[stateid].SetBasename('%s_%d'%(self.basename,cycle))
-        self.states[stateid].filenames['inpcrd'] = '%s_%d.rst7'%(self.basename,
-                                                                 cycle-1)    
-        args = self.states[stateid].GetArgs()
-        # delete specific names for mdin, prmtop, and ref files, these are 
-        # always re-written or else linked to by the default names.
-        for flag in ['-i','-p','-ref']:
-            try:
-                i = args.index(flag)
-                args.pop(i)
-                args.pop(i)
-            except ValueError:
-                pass
+        Launch an AMBER sub-job using pilot-job. 
 
-        log_file = '%s_%d.log'%(self.basename,cycle)
-        err_file = '%s_%d.err'%(self.basename,cycle)
+        The input files for AMBER that define a state are assumed to be the 
+        default names mdin, prmtop, and refc. These files are always re-written 
+        or symlinked to in _buildInpFile().
+        """
+        # Working directory for this replica
+        wdir = '%s/r%d'%(os.getcwd(),replica)
+
+        # Cycle dependent input and output file names
+        inpcrd = '%s_%d.rst7'%(self.basename,cycle-1)
+        mdout  = '%s_%d.out'%(self.basename,cycle)
+        mdcrd  = '%s_%d.nc'%(self.basename,cycle)
+        rstrt  = '%s_%d.rst7'%(self.basename,cycle)
+        stdout = '%s_%d.log'%(self.basename,cycle)
+        stderr = '%s_%d.err'%(self.basename,cycle)
+
+        args = ['-O','-c',inpcrd,'-o',mdout,'-x',mdcrd,'-r',rstrt]
 
         #pilotjob: Compute Unit (i.e. Job) description
-        compute_unit_description = {
+        cpt_unit_desc = {
             "executable": self.exe,
-            "environment": [],
+            "environment": ['AMBERHOME=%s'%AMBERHOME],
             "arguments": args,
-            "output": log_file,
-            "error": err_file,   
-            "working_directory": os.getcwd()+"/r"+str(replica),
+            "output": stdout,
+            "error": stderr,   
+            "working_directory": wdir,
             "number_of_processes": int(self.keywords.get('SUBJOB_CORES')),
             "spmd_variation": self.spmd,
             }
 
-        if self.keywords.get('VERBOSE') == "yes":
-            print ( "Launching %s in directory %s (cycle %d)" % 
-                    (self.exe.split('/')[-1], os.getcwd()+"/r"+str(replica), 
-                     cycle) )
+        if self.verbose:
+            engine_name = self.exe.split('/')[-1]
+            print 'Launching %s in %s (cycle %d)'%(engine_name,wdir,cycle)
 
-        compute_unit=self.pilotcompute.submit_compute_unit(
-            compute_unit_description)
+        compute_unit = self.pilotcompute.submit_compute_unit(cpt_unit_desc)
         return compute_unit
         
     def _hasCompleted(self,replica,cycle):
@@ -224,12 +221,30 @@ class pj_amber_job(async_re_job):
         rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cycle)
         return rst7(rst).coords
 
+    def _checkStateParamsAreSame(self, variable, namelist):
+        """
+        Returns False if any two states have different values of a variable in
+        the specified namelist. If all states have the same value, then that 
+        value is returned.
+
+        This routine can be useful if a particular exchange protocol assumes
+        that certain state parameters (e.g. temperature) are the same in all 
+        states.
+        """
+        value = self.states[0].mdin.GetVariableValue(variable,namelist)
+        for state in self.states[1:]:
+            this_value = state.mdin.GetVariableValue(variable,namelist)
+            if this_value != value: return False
+        return value
+
 ###########################################################################
 #
 # Work in Progress: Gibbs sampling style exchanges (see impact_async_re.py)
 #
 ###########################################################################
     def _replicasWaiting(self):
+        # find out which replicas are waiting
+        self._update_running_no()
         # Return all replicas that are waiting AND have run at least once.
         replicas_waiting = [ k for k in range(self.nreplicas)
                              if ( self.status[k]['running_status'] == "W" 
@@ -237,6 +252,8 @@ class pj_amber_job(async_re_job):
         return replicas_waiting
 
     def _statesWaiting(self):
+        # find out which replicas are waiting
+        self._update_running_no()
         # Return all states occupied by replicas that are waiting AND have run
         # at least once.
         states_waiting = [ self.status[k]['stateid_current']
@@ -300,9 +317,12 @@ class pj_amber_job(async_re_job):
         Perform nreps rounds of exchanges among waiting replicas using 
         some form of Gibbs sampling.
         """
-        # find out which replicas are waiting
-        self._update_running_no()
         replicas_waiting = self._replicasWaiting()
+        states_waiting = self._statesWaiting()
+        nwaiting = len(replicas_waiting)
+        if nwaiting != len(states_waiting):
+            print ('Something weird happened, number of waiting replicas and'
+                   ' states are different!')
         # If not enough replicas are available, exit (this shouldn't happen
         # a lot in practice if lots of replicas are running).
         # if self.waiting < 2: return 0
@@ -318,11 +338,9 @@ class pj_amber_job(async_re_job):
         # the similarity of the empirical and exact distribution are
         # similar with a Kullback-Liebler divergence on the order of 0.1 or 
         # less.
-        nwaiting = len(replicas_waiting)
         nreps = nwaiting**4
         npermt = {}
         permt = {}
-        states_waiting = self._statesWaiting()
         U = self._computeSwapMatrix(replicas_waiting,states_waiting)
         # Remember that U is nreplicas x nreplicas with rows corresponding
         # to the replica ids and columns corresponding to the STATIC state

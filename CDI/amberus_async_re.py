@@ -42,13 +42,9 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         # Check that all umbrellas are one temperature.
         # The reduced energies calculated in this module do not account for
         # replicas running at different temperatures.
-        temp0 = self.states[0].mdin.GetVariableValue('temp0','cntrl')
-        for state in self.states[1:]:
-            this_temp0 = state.mdin.GetVariableValue('temp0','cntrl')
-            if this_temp0 != temp0:
-                self._exit('All temperatures MUST be the same when using'
-                           ' AMBERUS.\n%s contains temp0=%5.1f, was expecting'
-                           ' %5.1f'%(state.filenames['mdin'],this_temp0,temp0))
+        temp0 = self._checkStateParamsAreSame('temp0','cntrl')
+        if not temp0:
+            self._exit('All temperatures MUST be the same when using AMBERUS.')
         self.beta = 1./(BOLTZMANN_CONSTANT*temp0)
 
         # Look for a restraint template (try the basename?)
@@ -106,9 +102,8 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
 
         # test for and perform the exchange
         Exchange = pj_amber_job.ReplicaExchange(u_aa,u_bb,u_ab,u_ba)
-        if Exchange: 
-            self._swapStates(repl_a,repl_b)
-        if self.keywords.get('VERBOSE') == 'yes':
+        if Exchange: self._swapStates(repl_a,repl_b)
+        if self.verbose:
             # extract the actual coordinates for reporting purposes
             crds_a = self._extractLastCoordinates(repl_a)
             crds_b = self._extractLastCoordinates(repl_b)
