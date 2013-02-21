@@ -1,14 +1,11 @@
-#! /usr/bin/env python
-################################################################################
-#                                                                              
-# FILE: namelist.py - Python routines for parsing files with Fortran namelists
-#
-# DESCRIPTION: 
-#
-# AUTHOR: Tim Giese (TJG) - <giese@biomaps.rutgers.edu>
-#         Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
-#
-################################################################################
+"""
+FILE: namelist.py - Python routines for parsing files with Fortran namelists
+
+DESCRIPTION:
+
+AUTHOR: Tim Giese (TJG) - <giese@biomaps.rutgers.edu>
+        Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
+"""
 class NamelistCollection(list):
     """A list of namelists with easy access to namelist keys and values.
     """
@@ -35,8 +32,9 @@ class NamelistCollection(list):
 class Namelist(dict):
     """
     A dictionary derived class that contains the keys and values of a Fortran
-    namelist. The keys are generally strings while the values (which are comma
-    delimited in Fortran files) are lists, unless only one value is present.
+    namelist. Keys are stored as strings while values are cast as ints and 
+    floats when appropriate (Note: this does not occur for lists of ints and/or 
+    floats).
     """
     def __init__(self,name,*args,**kwargs):
         self.name = name
@@ -120,12 +118,21 @@ def ConvertToFloats(eles):
         eles[i] = float(eles[i])
     return eles
 
-def ConvertToCommonType(eles):
-    if AllElementsAreInt(eles):
-        eles = ConvertToInts(eles)
-    elif AllElementsAreFloat(eles):
-        eles = ConvertToFloats(eles)
-    return eles
+# Replaced this when it was decided to not return lists anymore
+# def ConvertToCommonType(eles):
+#     if AllElementsAreInt(eles):
+#         eles = ConvertToInts(eles)
+#     elif AllElementsAreFloat(eles):
+#         eles = ConvertToFloats(eles)
+#     return eles
+
+def ConvertToCommonType(e):
+    if ValueIsInt(e): 
+        return int(e)
+    elif ValueIsFloat(e):
+        return float(e)
+    else:
+        return str(e)
 
 def IsLikeAList(v):
    """Return True if v is a non-string sequence and is iterable. Note that
@@ -212,12 +219,7 @@ def ReadNamelists(filename):
                 
         nlMap = {}
         for key,val in keyvals:
-            key = key.strip()
-            val = val.strip()
-            values = val.split(",")
-            values = ConvertToCommonType(values)
-            if len(values) == 1: nlMap[key] = values[0]
-            else:                nlMap[key] = values
+            nlMap[key.strip()] = ConvertToCommonType(val.strip())
 
         nlObjs.append(Namelist(nlName,nlMap))
 

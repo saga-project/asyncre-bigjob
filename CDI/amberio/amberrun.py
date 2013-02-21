@@ -7,8 +7,15 @@ AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
 
 REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
 """
-def ReadAmberGroupfile(groupfile):
+def ReadAmberGroupfile(groupfile, engine='sander'):
     """Read an AMBER groupfile and return an AmberRunCollection.
+
+    REQUIRED ARGUMENTS:
+    groupfile - AMBER groupfile, may contain comments, etc.
+
+    OPTIONAL ARGUMENTS:
+    engine - MD engine expected to run this groupfile (default = sander). This 
+    is used to make the runs aware of default values.
     """
     runList = AmberRunCollection()
     for line in open(groupfile,'r'):
@@ -31,7 +38,7 @@ def ReadAmberGroupfile(groupfile):
                 if token == '-ref': filenames['ref'] = tokens[i+1]
                 if token == '-x': filenames['mdcrd'] = tokens[i+1]
                 if token == '-inf': filenames['mdinfo'] = tokens[i+1]
-            runList.append(AmberRun(mode=mode,**filenames))
+            runList.append(AmberRun(mode=mode,engine=engine,**filenames))
     return runList
 
 class AmberRunCollection(list):

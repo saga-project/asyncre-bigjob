@@ -141,7 +141,7 @@ class AmberMdin(object):
         outfile.write(self.title)
         for name in ['cntrl','ewald','qmmm','pb']:
             try:
-                # GetFirstMatch raises an exception if now matches occur
+                # GetFirstMatch raises an exception if no matches occur
                 # TODO: fix this?
                 nl = self.namelists.GetFirstMatch(name)
                 outfile.write(nl.SprintFortran(max_chars_per_line))
@@ -160,7 +160,8 @@ class AmberMdin(object):
             for key in nl.keys(): outfile.write(' %s=%s\n'%(key,nl[key]))
         except:
             pass
-        outfile.close()
+
+        if outfile is not sys.__stdout__: outfile.close()
                   
     def SetDefaults(self, engine='sander'):
         """Set the default variables for a particular MD engine (e.g. sander).
@@ -405,3 +406,55 @@ class AmberNamelist(Namelist):
                 raise ValueError(msg)
         else:
             raise ValueError('Unrecognized AMBER mdin namelist: %s'%self.name)
+
+if __name__ == '__main__':
+    import sys,os
+    print '=== AmberMdin Test Suite ==='
+    clean = False
+    if len(sys.argv) < 2:
+        print 'No mdin test file specified, writing/reading a stock mdin file.'
+        # Tried to fit as many "tricky" mdin settings as I could here
+        mdin_test = (' --title1--\n'
+                     ' &cntrl\n'
+                     '  irest = 1, ntx = 5, ! restart flag\n'
+                     '  ifqnt = 1, nmropt = 1\n'
+                     ' /\n'
+                     ' --title2--\n'
+                     ' &ewald\n'
+                     '  dsum_tol = 1.0e-6, order = 6, \n'
+                     ' /\n'
+                     ' &qmmm\n'
+                     "  qmmask = ':1-2,@10-11', qmcharge = -1\n"
+                     '  ! a comment on its own line!\n'
+                     ' /\n'
+                     " &wt type='DUMPFREQ', istep = 1 /\n"
+                     " &wt type='END' /\n"
+                     ' DISANG=RST\n'
+                     )
+        test_name = 'test.mdin'
+        clean = True
+        out = open(test_name,'w')
+        out.write(mdin_test)
+        out.close()
+    else:
+        test_name = sys.argv[1]
+        print 'Reading mdin from %s'%test_name
+        mdin_test = ''.join(open(test_name).readlines())
+        
+    print 'mdin test file:'
+    print '======'
+    print mdin_test
+    print '======'
+   
+    try:
+        print '>>> mdin_obj = ReadAmberMdinFile(%s)'%test_name
+        mdin_obj = ReadAmberMdinFile(test_name)
+        print '>>> mdin_obj.WriteAmberMdinFile(sys.stdout)'
+        print '======'
+        mdin_obj.WriteAmberMdinFile(sys.stdout)
+        print '======'
+    except KeyError:
+        pass
+    if clean:
+        print 'Cleaning up %s'%test_name
+        os.remove(test_name)
