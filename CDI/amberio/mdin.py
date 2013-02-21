@@ -131,6 +131,7 @@ class AmberMdin(object):
         Write a new mdin file with the current namelist information. For 
         clarity, any values that are set to the default will be omitted.
         """
+        import sys
         if hasattr(outfile,'write'):
             pass
         elif isinstance(outfile,str):
