@@ -21,13 +21,13 @@ ASyncRE is a Python package to perform file-based asynchronous parallel replica 
 
 The current implementation is aimed at computer clusters managed by a queuing system and supported by a shared filesystem. The BigJob distributed computing infrastructure (https://github.com/saga-project/BigJob/wiki) is used for job launching and monitoring. Instructions on how to install BigJob on a cluster are available at https://github.com/saga-project/BigJob/wiki/BigJob-Tutorial-Part-2:-Installation. While primarily directed at NSF XSEDE clusters, BigJob supports most cluster configurations.
 
-The ASyncRE package includes a core module which performs common tasks such as job staging through BigJob and exchanging of parameters among replicas. Support for arbitrary MD engines and RE schemes are introduced through user-provided modules (see below). Currently, MD engine modules are available for the Amber and IMPACT MD programs. A similar modular mechanism provides support for arbitrary RE schemes (temperature, Hamiltonian, etc.), including arbitrary multidimensional combinations of these (such as 2D RE temperature/Hamiltonian). The software is currently distributed with modules for multidimensional RE umbrella sampling with Amber, and BEDAM lambda-RE alchemical binding free energy calculations with the Impact MD engine.
+The ASyncRE package includes a core module which performs common tasks such as job staging through BigJob and exchanging of parameters among replicas. Support for arbitrary MD engines and RE schemes are introduced through user-provided modules (see below). Currently, MD engine modules are available for the AMBER and IMPACT MD programs. A similar modular mechanism provides support for arbitrary RE schemes (temperature, Hamiltonian, etc.), including arbitrary multidimensional combinations of these (such as 2D RE temperature/Hamiltonian). The software is currently distributed with modules for multidimensional RE umbrella sampling with AMBER, and BEDAM lambda-RE alchemical binding free energy calculations with the Impact MD engine.
 
 The algorithm implemented by ASyncRE can be summarized as follows:
 
-1. Job files and executable for the replicas are set up as appropriate for the MD engine/RE scheme combination as specified by a user-provided module. Typically this is accomplished by parsing a set of template input files according to the thermodynamic and potential energy settings which distinguish one replica from another. Each replica lives in a separate sub-directory of the working directory. These replica sub-directories are named r0, r1, ..., r<M-1>, where M is the number of replicas.
+1. Job files and executables for the replicas are set up as appropriate for the MD engine/RE scheme combination as specified by a user-provided module. Typically this is accomplished by parsing a set of template input files according to the thermodynamic and potential energy settings which distinguish one replica from another. Each replica lives in a separate sub-directory of the working directory. These replica sub-directories are named r0, r1, ..., r<M-1>, where M is the number of replicas.
 
-2. Periodically, a subset of the replicas are submitted to BigJob for execution and enter a "R" (running) state. When a replica completes a run (of length specified in the MD engine input file), referred in what follows as a "cycle", it enters a "W" (waiting) state which makes it eligible for exchange of thermodynamic and other parameters with other replicas and for the initiation of a new run cycle.
+2. Periodically, a subset of the replicas are submitted to BigJob for execution and enter a "R" (running) state. When a replica completes a run (of length specified in the MD engine input file), referred to in what follows as a "cycle", it enters a "W" (waiting) state which makes it eligible for exchange of thermodynamic and other parameters with other replicas and for the initiation of a new run cycle.
 
 3. Periodically, exchanges of thermodynamic parameters are performed between the replicas in the waiting state based on the appropriate replica exchange rules (as specified in user modules) based on their thermodynamic states (temperature for example), or potential energy settings, together with the necessary structural and energetic information obtained from the MD engine output files.
 
@@ -51,7 +51,7 @@ Installation:
 See README file in top-level directory.
 
 Execution:
-----------
+---------
 
 A typical command to initiate an ASyncRE simulations is as follows:
 
@@ -60,7 +60,7 @@ $ source ~/.bigjob/bin/activate
 $ cd working_directory
 $ python amber_us.py control_file.cntl > LOG 2>& &
 
-The second command above activates the virtualenv python environment (see BigJob documentation). The 'amber_us.py' is a short user-provided python script that loads the appropriate modules and launches the asynchronous RE simulation. For Amber/umbrella sampling is something like:
+The second command above activates the virtualenv python environment (see BigJob documentation). The 'amber_us.py' is a short user-provided python script that loads the appropriate modules and launches the asynchronous RE simulation. For AMBER/umbrella sampling it is something like:
 
 import sys
 from amberus_async_re import amberus_async_re_job
@@ -112,9 +112,8 @@ VERBOSE="yes"
 ENGINE_INPUT_BASENAME = 'DMP_US'
 ENGINE_INPUT_EXTFILES = 'DMP_US.parm7,DMP_US_0.rst7'
 #-RE/simulation settings---------------
-TEMPERATURE = 310.0
-FORCE_CONSTANTS = '5.0,5.0:5.0,5.0:5.0,5.0:5.0,5.0'
-BIAS_POSITIONS = '275.,275.:275.,280.:280.,275.:280.,280.'
+FORCE_CONSTANTS = '5.0,5.0:5.0,5.0:5.0,5.0:5.0,5.0:5.0,5.0:5.0,5.0'
+BIAS_POSITIONS = '275.,275.:275.,280.:280.,275.:280.,280.:280.,285.:285.,280'
 #-BigJob settings----------------------
 WALL_TIME=200
 COORDINATION_URL="redis://ILikeBigJob_wITH-REdIS@gw68.quarry.iu.teragrid.org:6379"
@@ -122,7 +121,7 @@ RESOURCE_URL="pbs://localhost"
 QUEUE="batch"
 BJ_WORKING_DIR='/home/radakb/amber_us_2d/agent'
 TOTAL_CORES=16
-SUBJOB_CORES=1
+SUBJOB_CORES=8
 #---------------------------------------
 
 The command above causes, among other things, the submission of a job to the local queuing system named 'bliss_job' (a fixed name assigned by BigJob). Execution terminates after a specified amount of wall-clock time. The internal state of the simulation is check-pointed periodically and at the end of execution so that it can be restarted at a later time (see below). Failed runs are automatically detected and the relevant replicas are reset and restarted. 
@@ -137,7 +136,7 @@ As shown above the control file is a simple keyword/value pair listing. The synt
 Main settings:
 
 RE_TYPE
-Identifies the replica exchange scheme. Required. "AMBERUS" and "BEDAMTEMPT" are currently the two natively recognized types (corresponding to Amber Umbrella Sampling, and BEDAM+Temperature respectively). However feasible values vary depending on the available extension application modules in your installation.
+Identifies the replica exchange scheme. Required. "AMBERUS" and "BEDAMTEMPT" are currently the two natively recognized types (corresponding to AMBER Umbrella Sampling, and BEDAM+Temperature respectively). However feasible values vary depending on the available extension application modules in your installation.
 
 ENGINE
 Sets the MD engine. Required. "AMBER" and "IMPACT" are currently the two natively recognized values. Feasible values vary depending on the available extension application modules in your installation.
@@ -284,53 +283,55 @@ Performs an exchange attempt between replica 'repl_a' and 'repl_b'. This usually
        self.status[repl_a]['stateid_current'] = sid_b
        self.status[repl_a]['stateid_current'] = sid_a
 
-*Note* The _doExchange_pair() interface above based on the default Metropolis exchange algorithm will be soon replaced by a more efficient Gibbs sampling exchange algorithm already implemented for the Impact and Amber US extension modules once incompatibilities between the two implementations are resolved.
+*Note* The _doExchange_pair() interface above based on the default Metropolis exchange algorithm will be soon replaced by a more efficient Gibbs sampling exchange algorithm already implemented for the Impact and AMBERUS extension modules once incompatibilities between the two implementations are resolved.
 
 _launchReplica(self,replica,cycle):
 
-Instructs BigJob on how to launch a replica, which is typically a process common for all applications using the same MD engine. An example for Amber (sander) is illustrated below. The routine is required to return the BigJob compute unit id of the replica being launched. Also, note that, technically, the submission of the replica to BigJob does not necessarily imply immediate execution; rather, the replica job is typically placed in a buffer area (see above) and will begin execution on when sufficient CPU resources on a compute node become available.
+Instructs BigJob on how to launch a replica, which is typically a process common for all applications using the same MD engine. An example for AMBER (sander) is illustrated below. The routine is required to return the BigJob compute unit id of the replica being launched. Also, note that, technically, the submission of the replica to BigJob does not necessarily imply immediate execution; rather, the replica job is typically placed in a buffer area (see above) and will begin execution on when sufficient CPU resources on a compute node become available.
 
     def _launchReplica(self,replica,cycle):
-        """Launches Amber sub-job using pilot-job
         """
-        input_file = "%s_%d.inp" % (self.basename, cycle)
-        out_file = "%s_%d.out" % (self.basename, cycle)
-        prm_file = "%s.parm7" % self.basename
-        crd_file = "%s_%d.rst7" % (self.basename, cycle-1)
-        rst_file = "%s_%d.rst7" % (self.basename, cycle)
-        xyz_file = "%s_%d.nc" % (self.basename, cycle)
-        info_file = "%s_%d.info" % (self.basename, cycle)
-        log_file = "%s_%d.log" % (self.basename, cycle)
-        err_file = "%s_%d.err" % (self.basename, cycle)
+	Launch an AMBER sub-job using pilot-job. 
 
-        arguments = ["-O",
-                     "-i", input_file,
-                     "-o", out_file, 
-                     "-p", prm_file, 
-                     "-c", crd_file, 
-                     "-r", rst_file, 
-                     "-x", xyz_file, 
-                     "-inf", info_file]
+	The input files for AMBER that define a state are assumed to be the 
+        default names mdin, prmtop, and refc. These files are always re-written 
+        or symlinked to in _buildInpFile().
+        """
+	# Working directory for this replica
+        wdir = '%s/r%d'%(os.getcwd(),replica)
+
+	# Cycle dependent input and output file names
+	inpcrd = '%s_%d.rst7'%(self.basename,cycle-1)
+        mdout  = '%s_%d.out'%(self.basename,cycle)
+        mdcrd  = '%s_%d.nc'%(self.basename,cycle)
+        rstrt  = '%s_%d.rst7'%(self.basename,cycle)
+        stdout = '%s_%d.log'%(self.basename,cycle)
+        stderr = '%s_%d.err'%(self.basename,cycle)
+
+	args = ['-O','-c',inpcrd,'-o',mdout,'-x',mdcrd,'-r',rstrt]
 
         #pilotjob: Compute Unit (i.e. Job) description
-        compute_unit_description = {
+	cpt_unit_desc = {
             "executable": self.exe,
             "environment": [],
-            "arguments": arguments,
-            "output": log_file,
-            "error": err_file,   
-            "working_directory":os.getcwd()+"/r"+str(replica),
+            "arguments": args,
+            "output": stdout,
+            "error": stderr,   
+            "working_directory": wdir,
             "number_of_processes": int(self.keywords.get('SUBJOB_CORES')),
             "spmd_variation": self.spmd,
             }
-       compute_unit=self.pilotcompute.submit_compute_unit(compute_unit_description)
-       return compute_unit
+	
+	if self.verbose:
+            engine_name = self.exe.split('/')[-1]
+            print 'Launching %s in %s (cycle %d)'%(engine_name,wdir,cycle)
 
-
+        compute_unit = self.pilotcompute.submit_compute_unit(cpt_unit_desc)
+        return compute_unit
 
 _hasCompleted(self,repl,cy): (optional)
 
-Returns 'True' if replica 'repl' has successfully completed cycle 'cy', otherwise 'False'. This is used to automatically relaunch replica runs that, for whatever reason, have failed to complete. Specification of this routine is optional because a default version, based on querying BigJob, exists in the core ASyncRE module. However the default routine is unable to detect the return status of a replica during a restart (see RE_SETUP above) because BigJob has no knowledge of it. In this case the default routine assumes success and returns 'True'. By providing a customizing routine ASyncRE will be able to detect failed replicas at restart and relaunch them automatically. For Amber jobs, detecting the presence of a restart file is usually sufficient. For example:
+Returns 'True' if replica 'repl' has successfully completed cycle 'cy', otherwise 'False'. This is used to automatically relaunch replica runs that, for whatever reason, have failed to complete. Specification of this routine is optional because a default version, based on querying BigJob, exists in the core ASyncRE module. However the default routine is unable to detect the return status of a replica during a restart (see RE_SETUP above) because BigJob has no knowledge of it. In this case the default routine assumes success and returns 'True'. By providing a customizing routine ASyncRE will be able to detect failed replicas at restart and relaunch them automatically. For AMBER jobs, detecting the presence of a restart file is usually sufficient. For example:
 
     def _hasCompleted(self,replica,cycle):
         rstfile = "r%d/%s_%d.rst7" % (replica, self.basename, cycle)
@@ -339,3 +340,40 @@ Returns 'True' if replica 'repl' has successfully completed cycle 'cy', otherwis
         else:
             return False    
 
+AMBER specifics:
+----------------
+
+Using different AMBER engines:
+
+Currently, the user must make a choice between AMBER's two main MD engines, SANDER and PMEMD, in the ASyncRE input file. Invoking 'AMBER' will default to the SANDER engine, due to its broader capabilities ('AMBER-SANDER' and 'SANDER' are also recognized). The more performance tuned PMEMD can be requested via 'AMBER-PMEMD' or just 'PMEMD'. 
+
+Executables compiled for use with MPI are automatically used when the BigJob setting 'SUBJOB_CORES' is greater than one (this also flags the proper 'SPMD' setting, see "Control settings" above). This choice is intentionally limited because AMBER MPI executables all exit with an error if mpirun (or equivalent commands) is called with fewer than two processors and there is currently no way (or reason) for AsyncRE
+to detect this error.
+
+Neither pmemd.CUDA nor pmemd.CUDA.MPI are currently supported.
+
+AMBER control settings:
+
+AMBER_GROUPFILE
+Indicates an AMBER groupfile specifying input files (output files and other flags are ignored) defining each state and the starting structure of the replica initially in that state (ignored if RE_SETUP is 'no'). In this way, ASyncRE is perfectly compatible with input formats for traditional synchronous RE as implemented in AMBER. This is also currently the only way to specify different starting coordinates for each replica, a capability that can be especially important for replica exchange umbrella sampling.
+
+AMBER_RESTRAINT_TEMPLATE
+In replica exchange umbrella sampling simulations, this indicates which file to look in for determining restraints. If it is not specified, then a file using the ENGINE_INPUT_BASENAME with the extension '.RST' is expected. Note that it does not matter at all whether or not a restraint file is specified in the mdin file. ASyncRE will overwrite such information as needed.
+
+Multidimensional umbrella sampling control settings:
+----------------------------------------------------
+
+FORCE_CONSTANTS and BIAS_POSITIONS
+These settings should be strings of values indicating the respective quantities for harmonic biasing potentials. In one dimension, different states are delimited by a comma. In higher dimensions, each coordinate is delimited by a comma and each state is delimited by a colon.
+
+Examples:
+
+four states in one dimension:
+FORCE_CONSTANTS = '50.0,50.0,50.0,50.0'
+BIAS_POSITIONS = '1.0,1.5,2.0,2.5'
+
+six states in two dimensions:
+FORCE_CONSTANTS = '5.0,5.0:5.0,5.0:5.0,5.0:5.0,5.0:5.0,5.0:5.0,5.0'
+BIAS_POSITIONS = '275.,275.:275.,280.:280.,275.:280.,280.:280.,285.:285.,280'
+
+The order parameter units and bias form (i.e. Ubias = k(x-x0)^2 or (k/2)(x-x0)^2, FORCE_CONSTANTS --> k, BIAS_POSITIONS --> x0) will depend on the specific MD engine.

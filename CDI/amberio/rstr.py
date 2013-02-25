@@ -1,19 +1,15 @@
-#! /usr/bin/env python
-################################################################################
-#                                                                              
-# FILE: AmberRestraint.py - plugin for AMBER nmropt style restraint files
-#
-# DESCRIPTION: This module provides a convenient implementation of restraints
-# in AMBER for use in Python. This is useful, for example, if one wants to
-# determine just the restraint energy of a set of coordinates without
-# running a full energy evaluation in AMBER.
-#
-# AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
-#
-# REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
-################################################################################
-from namelist import ReadNamelists
-import coordinates
+"""                                                                             
+FILE: rstr.py - plugin for AMBER nmropt style restraint files
+
+DESCRIPTION: This module provides a convenient implementation of restraints
+in AMBER for use in Python. This is useful, for example, if one wants to
+determine just the restraint energy of a set of coordinates without
+running a full energy evaluation in AMBER.
+
+AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
+
+REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
+"""
 from math import pi
 import sys
 
@@ -30,19 +26,16 @@ def ReadAmberRestraintFile(rstFilename):
     RETURN VALUES:
     amberRst - AmberRestraint object (list of NmroptRestraint)
     """
+    from namelist import ReadNamelists
     amberRst = AmberRestraint()
     # Read the namelists from the restraint file and look for &rst namelists
     namelists = ReadNamelists(rstFilename)
-    floatKeys = ['r0','r1','r2','r3','r4','k0','rk2','rk3']
     for nl in namelists:
         if nl.name == 'rst':
-            if 'iat' not in nl.keys():
-                msg = 'ERROR! Required key %s is not present.'%key
+            # only the iat keyword is required to define a restraint
+            if not nl.has_key('iat'):
+                msg = "'iat' must be specified to define an nmropt restraint."
                 raise Exception(msg)
-            for key in floatKeys:
-                if key in nl.keys():
-                    if isinstance(nl[key],list):
-                        nl[key] = float(nl[key][0])
             amberRst.append( NmroptRestraint(nl.pop('iat'),**nl) )
     if len(amberRst) < 1:
         raise Exception('No &rst namelists found in file: %s'%rstFilename)
@@ -67,7 +60,7 @@ class AmberRestraint(list):
         if hasattr(items, '__iter__'):
             for item in items:
                 self.append(item)
-                
+            
     def Energy(self,crds):
         """Calculate the total energy from all restraints.
 
@@ -200,16 +193,18 @@ class NmroptRestraint(object):
     """
     def __init__(self,iat,**rstr_params):
         # Determine the restraint type from atom and rstwt info
-        self.iat = tuple(iat)
+        if isinstance(iat,(tuple,list)):
+            self.iat = iat
+        else:
+            self.iat = tuple([ int(i) for i in iat.split(',') ])
         self.nAtoms = len(self.iat)
         if 'rstwt' in rstr_params.keys(): 
-            self.rstwt = tuple(rstr_params['rstwt'])
+            self.rstwt = [ float(w) for w in rstr_params['rstwt'].split(',') ]
             self.rstType = 'Gen. Dist. Coord.'
             if len(self.rstwt) != self.nAtoms/2:
-                msg = ('Not enough rstwt values provided for %d atom Gen. Dist.'
-                       ' Coord. Expected %d, but got %d.'%(self.nAtoms,
-                                                           self.nAtoms/2,
-                                                           len(self.rstwt)))
+                msg = ('Wrong number of rstwt values provided for %d atom Gen.' 
+                       ' Dist. Coord. Expected %d, but got %d.'
+                       %(self.nAtoms,self.nAtoms/2,len(self.rstwt)))
                 raise Exception(msg)
         else:                             
             self.rstwt = None
@@ -227,8 +222,8 @@ class NmroptRestraint(object):
     def SetRestraintParameters(self,**rstr_params):
         """Set any of r0, r1, r2, r3, r4, k0, rk2, and rk3 by assignment.
         """
-        # A pure harmonic restraint can be set with just r0,
-        if 'r0' in rstr_params.keys(): 
+        # A pure harmonic restraint can be set with just r0, 
+        if rstr_params.has_key('r0'):
             r0 = float(rstr_params['r0'])
             self.r[1:3] = [r0,r0]
             if self.rstType == 'Torsion':
@@ -241,11 +236,15 @@ class NmroptRestraint(object):
                 self.r[0] = r0 - 500.
                 self.r[3] = r0 + 500.
         # otherwise the four positions need to be set individually.
-        else:
-            if 'r1' in rstr_params.keys(): self.r[0] = float(rstr_params['r1'])
-            if 'r2' in rstr_params.keys(): self.r[1] = float(rstr_params['r2'])
-            if 'r3' in rstr_params.keys(): self.r[2] = float(rstr_params['r3'])
-            if 'r4' in rstr_params.keys(): self.r[3] = float(rstr_params['r4'])
+        else:          
+            if rstr_params.has_key('r1'): 
+                self.r[0] = float(rstr_params['r1'])
+            if rstr_params.has_key('r2'): 
+                self.r[1] = float(rstr_params['r2'])
+            if rstr_params.has_key('r3'): 
+                self.r[2] = float(rstr_params['r3'])
+            if rstr_params.has_key('r4'): 
+                self.r[3] = float(rstr_params['r4'])
 
         # Use radians for angle and torsion calculations
         if self.rstType == 'Angle' or self.rstType == 'Torsion':
@@ -258,14 +257,14 @@ class NmroptRestraint(object):
             raise ValueError(msg)
 
         #  A pure harmonic restraint can be set with just k0,
-        if 'k0' in rstr_params.keys(): 
+        if rstr_params.has_key('k0'):
             k0 = float(rstr_params['k0'])
             self.rk = [k0,k0]
         # otherwise the two force constants need to be set individually.
         else:
-            if 'rk2' in rstr_params.keys():
+            if rstr_params.has_key('rk2'):
                 self.rk[0] = float(rstr_params['rk2'])
-            if 'rk3' in rstr_params.keys(): 
+            if rstr_params.has_key('rk3'):
                 self.rk[1] = float(rstr_params['rk3'])
 
     def Coord(self,crds):
@@ -294,6 +293,7 @@ class NmroptRestraint(object):
         r - the restraint coordinate (in Angstroms or radians)
         drdx - 3N list of cartesian gradients (unitless or radians/Angstrom)
         """
+        import coordinates
         r = 0.
         drdx = [ 0. for n in range(len(crds)) ]
         if self.rstType == 'Bond': 
@@ -325,7 +325,7 @@ class NmroptRestraint(object):
             for k in range(len(self.rstwt)):
                 i = self.iat[2*k+0] - 1
                 j = self.iat[2*k+1] - 1
-                x,drdxi,drdkj = coordinates.BondAndGradients(crds,i,j)
+                x,drdxi,drdxj = coordinates.BondAndGradients(crds,i,j)
                 r += self.rstwt[k]*x
                 for m in range(3):
                     drdx[3*i+m] += self.rstwt[k]*drdxi[m]
@@ -489,14 +489,15 @@ if __name__ == '__main__':
     # Read restraints from a file
     rstFile = sys.argv[1]
     print 'reading AMBER restraint file: %s'%rstFile
+    print '>>> rstTest =  ReadAmberRestraintFile(%s)'%rstFile
     rstTest = ReadAmberRestraintFile(rstFile)
 
     # Create an nmropt restraint in pure python
     print 'testing creation of restraints in pure python:'
-    print '> rstTest.append(NmroptRestraint((1,2)))'
+    print '>>> rstTest.append(NmroptRestraint((1,2)))'
     print '(makes a dummy restraint between atoms 1 and 2)'
     rstTest.append(NmroptRestraint((1,2)))
-    print '> rstTest[-1].SetRestraintParameters(r0=1.0,k0=10.)'
+    print '>>> rstTest[-1].SetRestraintParameters(r0=1.0,k0=10.)'
     print '(sets a pure harmonic potential with only 2 parameters)'
     rstTest[-1].SetRestraintParameters(r0=1.0,k0=10.)
 
@@ -516,26 +517,26 @@ if __name__ == '__main__':
 
     # Print a report of the restraints so far
     print 'printing an AMBER-style report:'
+    print '>>> rstTest.PrintRestraintReport(crds,anames)'
     rstTest.PrintRestraintReport(crds,anames)
     
     if crds is not None:
         # Print a report like those found after MD steps
         print
         print 'printing an AMBER-style restraint energy decomposition:'
+        print '>>> rstTest.PrintRestraintEnergyReport(crds)'
         rstTest.PrintRestraintEnergyReport(crds)
 
         # Test the total energy and forces against an AMBER forcedump.dat
         print
         print 'calculating total restraint energy and forces:'
+        print '>>> energy,gradients = rstTest.EnergyAndGradients(crds)'
         e,g = rstTest.EnergyAndGradients(crds)
         print 'RESTRAINT  = %12.4f'%e
         print 'Forces (same format as forcedump.dat)'
         for i in range(0,len(g),3):
-            gx = -g[i+0]
-            gy = -g[i+1]
-            gz = -g[i+2]
-            print ' % 18.16e % 18.16e % 18.16e'%(gx,gy,gz)
-            
+            print ' % 18.16e % 18.16e % 18.16e'%(-g[i+0],-g[i+1],-g[i+2])           
     print
     print 'writing a new restraint file to stdout:'
+    print '>>> rstTest.WriteAmberRestraintFile(sys.stdout)'
     rstTest.WriteAmberRestraintFile(sys.stdout)

@@ -1,11 +1,6 @@
-import random, math
+import random, math # Only used in the now deprected _doExchange_pair()
 from pj_async_re import async_re_job
-from amber_async_re import pj_amber_job
-# AMBER plugins
-from amberio.AmberRestraint import ReadAmberRestraintFile
-# uses values from sander/src/constants.F90
-BOLTZMANN_CONSTANT = 1.380658*6.0221367/4184 # in kcal/mol-K
-
+from amber_async_re import pj_amber_job, BOLTZMANN_CONSTANT
 class amberus_async_re_job(pj_amber_job,async_re_job):
 
     def _checkInput(self):
@@ -32,139 +27,134 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
             self._exit("BIAS_POSITIONS needs to be specified")
         posbias = ParseStateParams(self.keywords.get('BIAS_POSITIONS'))
         # check that parameter dimensions match
-        self.nreplicas = len(kbias)
-        bias_dimensions = len(kbias[:][0])
-        if len(posbias) != self.nreplicas:
+        nR0 = len(posbias)
+        nK0 = len(kbias)
+        n   = self.nreplicas
+        if nR0 != nK0:
             msg = ('Number of FORCE_CONSTANTS not equal to number of'
                    ' BIAS_POSITIONS')
             self._exit(msg)
+        if nR0 != n or nK0 != n:
+            msg = ('Expected %d umbrella parameter sets, but instead found %d'
+                   ' FORCE_CONSTANTS and %d BIAS_POSITIONS'%(n,nK0,nR0))
+            self._exit(msg)
+                   
+        # Check that all umbrellas are one temperature.
+        # The reduced energies calculated in this module do not account for
+        # replicas running at different temperatures.
+        temp0 = self._checkStateParamsAreSame('temp0','cntrl')
+        if not temp0:
+            self._exit('All temperatures MUST be the same when using AMBERUS.')
+        self.beta = 1./(BOLTZMANN_CONSTANT*temp0)
 
-        #simulation temperature
-        if self.keywords.get('TEMPERATURE') is None:
-            self._exit("TEMPERATURE is a required parameter")
-        temperature = float(self.keywords.get('TEMPERATURE'))
-        self.beta = 1./(BOLTZMANN_CONSTANT*temperature)
+        # Look for a restraint template (try the basename?)
+        if self.keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
+            restraint_template = '%s.RST'%self.basename
+        else:
+            restraint_template = self.keywords.get('AMBER_RESTRAINT_TEMPLATE')
+        if self.verbose:
+            print 'Using restraint template file: %s'%restraint_template
 
-        # 1) Read the AmberRestraint template
-        # 2) Modify a new object for each state/replica
-        # 3) Store a list of the umbrella objects
-        restraint_template = '%s.RST'%self.basename
-        self.umbrellas = [ ReadAmberRestraintFile(restraint_template)
-                           for n in range(self.nreplicas) ]
+        # Read the restraint template and then modify the restraint objects 
+        # based on the input,
+        # NB: For simplicity, hardcode all restraint files to have the same 
+        #     name. Each replica will simply overwrite this file at each cycle.
+        for state in self.states:
+            state.AddRestraints(restraint_template)
+            state.mdin.SetVariableValue('DISANG','US.RST',None)
+        bias_dimensions = len(kbias[:][0])
         for n in range(self.nreplicas):
             for m in range(bias_dimensions): 
                 k  = float(kbias[n][m])
                 r0 = float(posbias[n][m])
-                self.umbrellas[n][m].SetRestraintParameters(r0=r0,k0=k)
+                self.states[n].rstr[m].SetRestraintParameters(r0=r0,k0=k)
 
-    def _buildInpFile(self, replica):
+    def _buildInpFile(self, repl):
         """
-        Builds input file for a AMBER umbrella sampling replica based on a
-        template input file, BASENAME.inp, for the specified replica and cycle.
+        Builds input files for an AMBER umbrella sampling replica based on the
+        current state and cycle. For simplicity, all restraint files are named
+        US.RST and are remade at every cycle.
         """
-        stateid = self.status[replica]['stateid_current']
-        cycle = self.status[replica]['cycle_current']
+        sid = self.status[repl]['stateid_current']
+        cyc = self.status[repl]['cycle_current']
 
-        # Write a new restraint file for the current state
-        restraint_file = 'r%d/%s_%d.RST'%(replica,self.basename,cycle)
-        self.umbrellas[stateid].WriteAmberRestraintFile(restraint_file)
+        # 1) Write a new restraint file for the current state
+        # 2) Modify the input to print to a new output (trace) file
+        title =  (' umbrella sampling restraint for replica %d in state %d'
+                  ' during cycle %d'%(repl,sid,cyc))
+        rst_file = 'r%d/US.RST'%repl
+        self.states[sid].rstr.WriteAmberRestraintFile(rst_file,title)
+        trace_file = '%s_%d.TRACE'%(self.basename,cyc)
+        self.states[sid].mdin.SetVariableValue('DUMPAVE',trace_file,None)
+        # NB! This needs to be done last since the mdin file is written by
+        # this routine and the mdin object was modified here.
+        pj_amber_job._buildInpFile(self,repl)
 
-        input_template = '%s.inp'%self.basename
-        input_file = 'r%d/%s_%d.inp'%(replica,self.basename,cycle)
-        # read template buffer
-        tfile = self._openfile(input_template,'r')
-        tbuffer = tfile.read()
-        tfile.close()
-        # make modifications
-        tbuffer = tbuffer.replace('@n@',str(cycle))
-        # write out
-        ofile = self._openfile(input_file,'w')
-        ofile.write(tbuffer)
-        ofile.close()
-      
-    def _doExchange_pair(self,repl_a,repl_b):
-        """Perform exchange of bias parameters.        
+    def _doExchange_pair(self, repl_a, repl_b):
+        """Given two replicas, swap the state ids according to the Metropolis
+        criteria from swapping coordinates (proportional to bias energies). 
         """
-        if self.do_exchanges:
-            sid_a = self.status[repl_a]['stateid_current']
-            sid_b = self.status[repl_b]['stateid_current']
+        sid_a = self.status[repl_a]['stateid_current']
+        sid_b = self.status[repl_b]['stateid_current']
+           
+        # do the energy evaluations
+        u_aa = self._reduced_energy(sid_a,repl_a)
+        u_bb = self._reduced_energy(sid_b,repl_b)
+        u_ab = self._reduced_energy(sid_a,repl_b)
+        u_ba = self._reduced_energy(sid_b,repl_a)
+
+        # test for and perform the exchange
+        Exchange = pj_amber_job.ReplicaExchange(self,u_aa,u_bb,u_ab,u_ba)
+        if self.verbose: 
+            self._printExchangePairReport(repl_a,repl_b,u_aa,u_bb,u_ab,u_ba)
+        if Exchange: 
+            self._swapStates(repl_a,repl_b)
             
-            # extract the latest configuration and state information 
-            crds_a = self._extractLastCoordinates(repl_a)
-            crds_b = self._extractLastCoordinates(repl_b)
-            umbrella_a = self.umbrellas[sid_a]
-            umbrella_b = self.umbrellas[sid_b]
-
-            # do the energy evaluations
-            u_aa = umbrella_a.Energy(crds_a)
-            u_ab = umbrella_a.Energy(crds_b)
-            u_ba = umbrella_b.Energy(crds_a)
-            u_bb = umbrella_b.Energy(crds_b)
-            delta = (u_ab + u_ba) - (u_aa + u_bb)
-            u = self.beta*delta
+    def _printStateReport(self, repl):
+        """Report on a replica in relation to its current state (i.e. umbrella).
+        """
+        # Print a generic AMBER report
+        pj_amber_job._printStateReport(self,repl)
+        # Print an umbrella potential report
+        sid = self.status[repl]['stateid_current']
+        umbrella = self.states[sid].rstr
+        crds = self._extractLastCoordinates(repl)
+        print '\nUmbrella potential report:'
+        umbrella.PrintRestraintReport(crds)
+        umbrella.PrintRestraintEnergyReport(crds)
+  
+    def _computeSwapMatrix(self, replicas, states):
+        """
+        Compute the swap matrix U = (u_ij), where u_ij = u_i(x_j)
        
-            # test for and perform the exchange
-            Exchange = True
-            P_ab = 1.
-            csi = 0.
-            if u > 0.:
-                csi = random.random()
-                P_ab = math.exp(-u)
-                if csi > P_ab: Exchange = False
-            if Exchange:
-                sid_a = self.status[repl_a]['stateid_current']
-                sid_b = self.status[repl_b]['stateid_current']
-                self.status[repl_a]['stateid_current'] = sid_b
-                self.status[repl_b]['stateid_current'] = sid_a
-
-            if self.keywords.get('VERBOSE') == 'yes':
-                # extract the actual coordinates for reporting purposes
-                print ('======================================================='
-                       '=========================')
-                print 'Exchange Attempt : Replicas (%d,%d)'%(repl_a,repl_b)
-                print 'Replica %d Coordinate/Umbrella Info:'%repl_a
-                umbrella_a.PrintRestraintReport(crds_a)
-                umbrella_a.PrintRestraintEnergyReport(crds_a)
-                print 'Replica %d Coordinate/Umbrella Info:'%repl_b
-                umbrella_b.PrintRestraintReport(crds_b)
-                umbrella_b.PrintRestraintEnergyReport(crds_b)
-                print ('======================================================='
-                       '=========================')
-                print 'U_a(x_b) - U_a(x_a) + U_b(x_a) - U_b(x_b) = %f kcal/mol'%delta
-                if Exchange:
-                    print 'Accepted! P(a<->b) = %f >= %f'%(P_ab,csi)
-                    print ('New states for replicas (%s,%s) are (%s,%s)'
-                           %(repl_a,repl_b,
-                             self.status[repl_a]['stateid_current'], 
-                             self.status[repl_b]['stateid_current']))
-                else:
-                    print 'Rejected! P(a<->b) = %f < %f'%(P_ab,csi)
-                print ('======================================================='
-                       '=========================')
-                
-    def _computeSwapMatrix(self,replicas):
-        # Compute all energies needed for permutation of replicas and states
-        nreplicas = len(replicas)
-        ee = [ [ 0. for j in range(nreplicas) ] for i in range(nreplicas) ]
-        for i,repl_i in enumerate(replicas):
+        Here it is assumed that u_i(x) = beta[U_0(x) + U_i(x)], so that 
+        differences of the matrix elements only involve the bias potentials U_i:
+        
+        u_ii + u_jj - u_ij - u_ji 
+                     = beta[U_0(x_i) + U_i(x_i)] + beta[U_0(x_j) + U_j(x_j)]
+                       - beta[U_0(x_j) + U_i(x_j)] - beta[U_0(x_i) + U_j(x_i)]
+                     =  beta[U_i(x_i) + U_i(x_j) - U_i(x_j) - U_j(x_i)]
+        """
+        # U will be sparse matrix, but is convenient bc the indices of the
+        # rows and columns will always be the same.
+        U = [ [ 0. for j in range(self.nreplicas) ] 
+              for i in range(self.nreplicas) ]
+        for repl_i in replicas:
             crds_i = self._extractLastCoordinates(repl_i)
-            # case repl_i = repl_j:
-            sid_i = self.status[repl_i]['stateid_current']
-            eii =  self.beta*self.umbrellas[sid_i].Energy(crds_i) 
-            ee[i][i] = eii
-            for j,repl_j in enumerate(replicas[0:i]): 
-                # case repl_i != repl_j:
-                sid_j = self.status[repl_j]['stateid_current']
-                eij = self.beta*self.umbrellas[sid_j].Energy(crds_i) 
-                ee[i][j] += eij
-                ee[j][i] += eij
-        return ee
+            for sid_j in states:
+                # energy of replica i in state j
+                u_ji = self.states[sid_j].rstr.Energy(crds_i)
+                U[sid_j][repl_i] = self.beta*u_ji
+        return U
 
-    def _reduced_energy(self,state_i,replica_j):
-        # Return the reduced energy in state_i of crds from replica_j
-        crds_j = self._extractLastCoordinates(replica_j)
-        umbrella_i = self.umbrellas[state_i]
-        return self.beta*umbrella_i.Energy(crds_j)
+    def _reduced_energy(self, state_i, repl_j):
+        """
+        Return the reduced energy of replica j in state i. 
+        NB: This is NOT the same as the current state of replica i.
+        """
+        crds_j = self._extractLastCoordinates(repl_j)
+        u_ij = self.states[state_i].rstr.Energy(crds_j)
+        return self.beta*u_ij
 
 if __name__ == '__main__':
     import sys, time
