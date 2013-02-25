@@ -10,8 +10,9 @@
 \usepackage[font=footnotesize]{subfig}
 \DeclareCaptionType{copyrightbox}
 \hyphenation{op-tical net-works semi-conduc-tor}
+
 \newif\ifdraft
-%\drafttrue
+\drafttrue
 \ifdraft
 \newcommand{\tbnote}[1]{ {\textcolor{magenta} { ***TcB: #1 }}}
 \newcommand{\jhanote}[1]{ {\textcolor{red} { ***SJ: #1 }}}
@@ -41,41 +42,41 @@
 
 \title{}
 
-\numberofauthors{5} 
-\author{
-\alignauthor
-A \\
-       \affaddr{x}\\
-       \affaddr{x}\\
-       \email{x}
-% 2nd. author
-\and  % use '\and' if you need 'another row' of author names
-% 3rd. author
-\alignauthor 
-B \\
-       \affaddr{xxxy}\\
-       \affaddr{xxx}\\
-       \email{xxx}
-% 5th. author
-\alignauthor 
-C \\
-       \affaddr{Rutgers University}\\
-       \affaddr{Piscataway, NJ 08854}\\
-       \email{xxx}
-}
+% \numberofauthors{5} 
+% \author{
+% \alignauthor
+%  \\
+%        \affaddr{x}\\
+%        \affaddr{x}\\
+%        \email{x}
+% % 2nd. author
+% \and  % use '\and' if you need 'another row' of author names
+% % 3rd. author
+% \alignauthor 
+% B \\
+%        \affaddr{xxxy}\\
+%        \affaddr{xxx}\\
+%        \email{xxx}
+% % 5th. author
+% \alignauthor 
+% C \\
+%        \affaddr{Rutgers University}\\
+%        \affaddr{Piscataway, NJ 08854}\\
+%        \email{xxx}
+% }
 
 \maketitle
 
 \begin{abstract}
 
-A description of the computational workflow, viz., the different
-machines/resources used, how many ensembles we simulated, data
-volumnes managed etc., (ii) any computational performance issues
-including (a) measuring "efficiency" as the number of distributed
-resources utilized goes as measured by $T_c$ (time to completion), (b)
-$T_c$ as a function of the number of replicas, and (iii) a description
-of the software infrastructure that is employed to enable distributed
-replica-exchange on XSEDE. 
+  A description of the computational workflow, viz., the different
+  machines/resources used, how many ensembles we simulated, data
+  volumnes managed etc., (ii) any computational performance issues
+  including (a) measuring "efficiency" as the number of distributed
+  resources utilized goes as measured by $T_c$ (time to completion),
+  (b) $T_c$ as a function of the number of replicas, and (iii) a
+  description of the software infrastructure that is employed to
+  enable distributed replica-exchange on XSEDE.
 
 \end{abstract}
 
@@ -90,13 +91,19 @@ replica-exchange on XSEDE.
 
 \section{Introduction}
 
-\section{Scientific Problem:  Computational Requirements}
-\label{sec:requirements}
 
+\jhanote{Describe the need for large-scale simulations. Describe what
+  is unique to replica-exchange. Challenges that arise from loose,
+  intermittent (stochastic) coupling, as opposed to fixed exchanges}
 
+\section{Scientific Problem}\label{sec:requirements}
 
-\section{Describing the Replica-Exchange ``Workflow'' } \label{}
+\jhanote{RE represents the core coordination/communication pattern for
+  a class of problems}
 
+\subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
+
+\subsection{Computational Requirements}
 
 \section{Software Environment}
 
@@ -120,22 +127,26 @@ XSEDE -- minimize the Time to Wait
 
 \section{Discussion}
 
-
-Productivity - Scientific efficiency vs. Computing efficiency!
-
-
-\subsection{Future Work: Different Exchange Modes}
-
-\subsubsection{Local}
-\subsubsection{Logically Distributed}
-\subsubsection{Physically Distributed}
-
-\subsection{Other}
+\jhanote{Overall Productivity is Scientific efficiency vs. Computing
+  efficiency!}
 
 \subsubsection{Issue of Resiliency/Redundacy} Emilio has interesting
 antidotes -- nodes crashing and RE starts limping but as nodes got
 rebooted, started speeding up.  Experience --> Old to New Aspects
 \texttt{get\_state()} - State monitoring capability
+
+
+\subsection{Future Work}
+
+\subsubsection{Multiple pilots}
+
+% \subsubsection{Local}
+\subsubsection{Logically Distributed}
+\subsubsection{Physically Distributed}
+
+\subsection{Different Exchange Modes}
+\subsection{Other}
+
 
 
 \section*{Acknowledgement}
