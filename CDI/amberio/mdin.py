@@ -3,16 +3,18 @@ FILE: mdin.py - plugin for I/O of AMBER mdin files
 
 DESCRIPTION: This module creates objects from AMBER mdin files. The objects are
 essentially collections of Fortran namelists that also have knowledge of the
-default values expected by AMBER.
+default values expected by AMBER (depending on the MD engine being used).
 
 AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
 
 REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
             MMPBSA.py source code: ambermd.org/AmberTools-get.html
 """
-from namelist import (Namelist, NamelistCollection, ReadNamelists, 
-                      ReadEverythingExceptNamelists)
-def ReadAmberMdinFile(mdin_name):
+__all__ = ['ReadAmberMdinFile','AmberMdin']
+
+from namelist import *
+
+def ReadAmberMdinFile(mdin_name, engine='sander'):
     """Read an AMBER mdin file and return an AmberMdin object.
     """
     # Read mdin to find namelists
@@ -37,7 +39,7 @@ def ReadAmberMdinFile(mdin_name):
         else:
             # Otherwise, append the line to the title.
             title += line + '\n'
-    return AmberMdin(title=title,*namelists)
+    return AmberMdin(title=title,engine=engine,*namelists)
 
 class AmberMdin(object):
     """
@@ -49,23 +51,30 @@ class AmberMdin(object):
     perform complicated tasks such as adding restraints, etc.
     """
     def __init__(self,*args,**kwargs):
+        # First, check for title and engine information
         self.title = ''
+        if kwargs.has_key('title'): self.title = kwargs.pop('title')
         engine = 'sander'
+        if kwargs.has_key('engine'): engine = kwargs.pop('engine')
+        # Now, collect the namelists:
         self.namelists = NamelistCollection()
-        # First, append any namelist objects to the list.
+        # Append any Namelist or Namelist-derived objects to the list.
         for arg in args:
-            if isinstance(arg,Namelist) or isinstance(arg,AmberNamelist):
+            if isinstance(arg,Namelist):
                 self.namelists.append(AmberNamelist(arg.name,arg))
-        # Then, check for a title or for namelists from dict specification
-        for key in kwargs.keys():
-            if key == 'title': 
-                self.title = kwargs[key]
-            elif key == 'engine':
-                engine = kwargs[key]
-            elif isinstance(kwargs[key],dict):
-                self.namelists.append(AmberNamelist(key,kwargs[key]))
+        # Check for Namelists specified as named dicts.
+        for name,namelist in kwargs.iteritems():
+            if isinstance(namelist,dict):
+                self.namelists.append(AmberNamelist(name,namelist))
         # Set default values of the namelists for the given engine
+        # NB: This must be done last since the namelist values need to be given
+        # before the remaining defaults can be set.
         self.SetDefaults(engine)
+
+    def SetDefaults(self, engine):
+        """Set the default variables for a particular MD engine (e.g. sander).
+        """
+        for nl in self.namelists: nl.SetDefaults(engine)
 
     def GetVariableValue(self, variable, namelist, wt_type=None):
         """
@@ -78,34 +87,54 @@ class AmberMdin(object):
         - String values require double literals (e.g. 'str' --> "'str'").
         """
         for nl in self.namelists.GetAllMatches(namelist):
-            if variable in nl.keys():
+            if nl.has_key(variable):
                 # Most namelists are uniquely defined by their name.
                 if wt_type is None:
                     return nl[variable]
                 # There may be multiple wt namelists with different type's
                 elif nl['type'] == wt_type:
                     return nl[variable]
-        return nl.defaults[variable]
+        # If there's no match, return the default
+        # NB: wt namelists have no default
+        if wt_type is None:
+            return self.namelists.GetFirstMatch(namelist).defaults[variable]
+        else:
+            return None
 
     def SetVariableValue(self, variable, value, namelist, wt_type=None):
         """
-        Set the value of a variable from a given namelist.
+        Set the value of a variable from a given namelist. Return 1 if
+        successful, 0 otherwise.
         
         Notes:
         - NMR variables belong to a namelist with name None.
         - wt namelists need an additional identifier for the 'type' attribute.
         - String values require double literals (e.g. 'str' --> "'str'").
         """
-        varIsDefault = True
         for nl in self.namelists.GetAllMatches(namelist):
             if wt_type is None or nl['type'] == wt_type:
-                varIsDefault = False
                 nl[variable] = value
-                break
-        if varIsDefault:
-            # The namelist of this variable does not exist and must be made.
-            self.namelists.append(AmberNamelist(namelist,{variable:value}))
-            if wt_type is not None: self.namelists[-1]['type'] = wt_type
+                return 1
+        # If the namelist of this variable does not exist, it must be made.
+        self.namelists.append(AmberNamelist(namelist,{variable:value}))
+        if wt_type is not None: 
+            self.namelists[-1]['type'] = wt_type
+            return 1
+        return 0
+
+    def SetSinglePoint(self):
+        """Change settings to run a single point energy calculation.
+        """
+        # Use debug mode for more verbose output
+        # self.SetVariableValue('do_debugf',1,'debug')
+        # self.SetVariableValue('dumpfrc',1,'debug')
+        # Use dynamics, not minimization (can report thermodynamic state info).
+        self.SetVariableValue('imin',0,'cntrl')
+        self.SetVariableValue('nstlim',0,'cntrl')
+        # Just print an energy report for step 0, no coordinate output.
+        self.SetVariableValue('irest',0,'cntrl')
+        self.SetVariableValue('ntpr',1,'cntrl')
+        self.SetVariableValue('ntwx',0,'cntrl')
 
     def SetRestart(self, isRestart=True):
         """Change whether or not this mdin file is a restart.
@@ -140,7 +169,7 @@ class AmberMdin(object):
             raise TypeError("'outfile' must be either a string or file object.")
 
         outfile.write(self.title)
-        for name in ['cntrl','ewald','qmmm','pb']:
+        for name in ['debug','cntrl','ewald','qmmm','pb']:
             try:
                 # GetFirstMatch raises an exception if no matches occur
                 # TODO: fix this?
@@ -164,11 +193,6 @@ class AmberMdin(object):
 
         if outfile is not sys.__stdout__: outfile.close()
                   
-    def SetDefaults(self, engine='sander'):
-        """Set the default variables for a particular MD engine (e.g. sander).
-        """
-        for nl in self.namelists: nl.SetDefaults(engine)
-
 class AmberNamelist(Namelist):
     """
     An AmberNamelist is simply a Fortran namelist that also has defaults 
@@ -177,10 +201,8 @@ class AmberNamelist(Namelist):
     can also be returned.
     """
     def __init__(self,name,*args,**kwargs):
-        if 'engine' in kwargs.keys(): 
-            engine = kwargs.pop('engine')
-        else:
-            engine = 'sander'
+        engine = 'sander'
+        if kwargs.has_key('engine'): engine = kwargs.pop('engine')
         super(AmberNamelist,self).__init__(name,*args,**kwargs)
         self.SetDefaults(engine)
 
@@ -205,9 +227,9 @@ class AmberNamelist(Namelist):
         """Return keys only for variables that differ from the default value.
         """
         non_defaults = []
-        for key in self.keys():
-            if key in self.defaults.keys():
-                if self[key] != self.defaults[key]:
+        for key,value in self.iteritems():
+            if self.defaults.has_key(key):
+                if value != self.defaults[key]:
                     non_defaults.append(key)
             else:
                 non_defaults.append(key)

@@ -1,61 +1,47 @@
 import os, sys, random
 from pj_async_re import async_re_job
 import numpy as np
+import math
+#import copy  # only needed for debug
+from amberio.ambertools import AMBERHOME,KB,rst7
 from amberio.amberrun import ReadAmberGroupfile, AmberRun
-#import copy, math # only needed for debug
 
-__all__ = 'pj_amber_job, BOLTZMANN_CONSTANT'
-
-# =============================================
-# AMBER environment check before doing anything
-# =============================================
-# Is AMBER installed and an appropriate version?
-AMBERHOME = os.getenv('AMBERHOME')
-if AMBERHOME is None:
-    raise Exception('AMBERHOME is not set.')
-sys.path.append(os.path.join(AMBERHOME,'bin'))
-try:
-    from chemistry.amber.readparm import rst7
-except:
-    raise Exception('Could not load AMBER python libraries. These are only'
-                    ' available in AmberTools12 and later.')
-
-# This definition uses values from sander/src/constants.F90
-BOLTZMANN_CONSTANT = 1.380658*6.0221367/4184 # in kcal/mol-K
+__all__ = 'pj_amber_job'
 
 class pj_amber_job(async_re_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
         
+        # TODO: Move this to async_re_job?
         self.verbose = False
         if self.keywords.get('VERBOSE') == "yes": self.verbose = True
         
         # ===========================
         # Set up the AMBER executable
         # ===========================
-        # Check which AMBER MD engine to use, default to sander
         engine = self.keywords.get('ENGINE').upper()
-        sander_flags = [ 'AMBER', 'SANDER', 'AMBER-SANDER' ]
-        pmemd_flags = [ 'PMEMD', 'AMBER-PMEMD' ]
-        engine_name = ''
-        if engine in sander_flags:  
-            engine_name = 'sander'
-        elif engine in pmemd_flags: 
-            engine_name = 'pmemd'
+        # TODO?: Cuda
+        supported_amber_engines = {'AMBER'        : 'sander', 
+                                   'SANDER'       : 'sander', 
+                                   'AMBER-SANDER' : 'sander',
+                                   'PMEMD'        : 'pmemd', 
+                                   'AMBER-PMEMD'  : 'pmemd'}
+        if supported_amber_engines.has_key(engine):
+            engine = supported_amber_engines[engine]
         else:
             self._exit('Requested ENGINE is not from AMBER (sander or pmemd)')
+
         if self.spmd == 'mpi' or int(self.keywords.get('SUBJOB_CORES')) > 1:
             self.spmd = 'mpi'
-            engine_name += '.MPI'
+            engine += '.MPI'
         # else just assume that a serial executable is desired
-        # TODO?: Cuda
 
         # Check that this executable exists, etc.
-        self.exe = os.path.join(AMBERHOME,'bin',engine_name)
+        self.exe = os.path.join(AMBERHOME,'bin',engine)
         if not os.path.exists(self.exe) or not os.access(self.exe,os.X_OK):
             self._exit('Could not find an executable: %s\nExpected it to'
-                       ' be at %s'%(engine_name,self.exe))
+                       ' be at %s'%(engine,self.exe))
 
         # ========================================================
         # Set up the general state/replica information - 2 methods
@@ -63,7 +49,7 @@ class pj_amber_job(async_re_job):
         # (1) If present, read the AMBER groupfile and define the states,
         if self.keywords.get('AMBER_GROUPFILE') is not None:
             groupfile = self.keywords.get('AMBER_GROUPFILE')
-            self.states = ReadAmberGroupfile(groupfile,engine_name)
+            self.states = ReadAmberGroupfile(groupfile,engine)
             self.nreplicas = len(self.states)
             if self.verbose:
                 print ('Creating %d replicas from AMBER groupfile: %s'
@@ -112,7 +98,7 @@ class pj_amber_job(async_re_job):
                 print ('Creating %d replicas using the provided'
                        ' ENGINE_INPUT_EXTFILES and ENGINE_INPUT_BASENAME'
                        %self.nreplicas)
-            self.states = [ AmberRun(mode='-O',engine=engine_name,**files)
+            self.states = [ AmberRun(mode='-O',engine=engine,**files)
                             for n in range(self.nreplicas) ]
 
     def _buildInpFile(self, repl):
@@ -138,17 +124,17 @@ class pj_amber_job(async_re_job):
         # 2) a new prmtop file 
         # 4) new ref coordinates (depends on mdin contents) 
         # 5) input coordinates (only if the cycle = 1)
-        if cyc > 1: 
-            new_state.mdin.SetRestart()
+        if cyc > 1: new_state.SetRestart()
         new_state.mdin.WriteAmberMdinFile(new_mdin)
 
         self._linkReplicaFile('prmtop',new_prmtop,repl)
 
-        if new_state.mdin.GetVariableValue('ntr','cntrl') == 1:
+        if new_state.HasReferenceCoordinates():
             self._linkReplicaFile('refc',new_refcrd,repl)
 
         if cyc == 1:
-            self._linkReplicaFile('%s_0.rst7'%self.basename,new_inpcrd,repl)
+            inpcrd = '%s_0.rst7'%self.basename
+            self._linkReplicaFile(inpcrd,new_inpcrd,repl)
 
     def _launchReplica(self,repl,cyc):
         """
@@ -182,10 +168,6 @@ class pj_amber_job(async_re_job):
             "number_of_processes": int(self.keywords.get('SUBJOB_CORES')),
             "spmd_variation": self.spmd,
             }
-
-        if self.verbose:
-            engine_name = self.exe.split('/')[-1]
-            print 'Launching %s in %s (cycle %d)'%(engine_name,wdir,cyc)
 
         compute_unit = self.pilotcompute.submit_compute_unit(cpt_unit_desc)
         return compute_unit
@@ -336,13 +318,13 @@ class pj_amber_job(async_re_job):
 
     def _printExchangePairReport(self, repl_a, repl_b, u_aa, u_bb, u_ab, u_ba):
         delta = (u_ab + u_ba) - (u_aa + u_bb)
-        print '================================================================'
+        # print '================================================================'
         print 'Exchange Attempt : Replicas (%d,%d)'%(repl_a,repl_b)
-        print '================================================================'
-        self._printStateReport(repl_a)
-        print
-        self._printStateReport(repl_b)
-        print '================================================================'
+        # print '================================================================'
+        # self._printStateReport(repl_a)
+        # print
+        # self._printStateReport(repl_b)
+        # print '================================================================'
         print 'u_a(x_b) - u_a(x_a) + u_b(x_a) - u_b(x_b) = %f kT'%delta
     
     def doExchanges(self):
@@ -411,11 +393,11 @@ class pj_amber_job(async_re_job):
                                                     U[sid_j][repl_j],
                                                     U[sid_i][repl_j],
                                                     U[sid_j][repl_i])
-            if self.verbose: self._printExchangePairReport(repl_i,repl_j,
-                                                           U[sid_i][repl_i],
-                                                           U[sid_j][repl_j],
-                                                           U[sid_i][repl_j],
-                                                           U[sid_j][repl_i])
+            # if self.verbose: self._printExchangePairReport(repl_i,repl_j,
+            #                                                U[sid_i][repl_i],
+            #                                                U[sid_j][repl_j],
+            #                                                U[sid_i][repl_j],
+            #                                                U[sid_j][repl_i])
             if exchange: self._swapStates(repl_i,repl_j)
         ###### DEBUG
         #     # list of current states of ALL replicas

@@ -1,13 +1,10 @@
-#! /usr/bin/env python
-################################################################################
-#                                                                              
-# FILE: coordinates.py - 
-#
-# DESCRIPTION:
-#
-# AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
-#
-################################################################################
+"""                                                                           
+FILE: coordinates.py - Pure Python routines for analyzing atom coordinates.
+
+DESCRIPTION:
+
+AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
+"""
 from math import sqrt,acos,pi
 def Bond(crds,i,j):
     return BondFromVecs(crds[3*i:3*(i+1)],crds[3*j:3*(j+1)])
@@ -34,8 +31,8 @@ def AngleAndGradients(crds,i,j,k):
 def AngleFromVecs(a,b,c):
     rBA = BondFromVecs(b,a)
     rBC = BondFromVecs(b,c)
-    rAB = BondFromVecs(a,b)
-    return acos( (rBA**2 + rBC**2 - rAB**2) / (2.*rBA*rBC) )
+    rAC = BondFromVecs(a,c)
+    return acos( (rBA**2 + rBC**2 - rAC**2) / (2.*rBA*rBC) )
 
 def Dihedral(crds,i,j,k,l):
     vi = crds[3*i:3*(i+1)]

@@ -1,18 +1,15 @@
  GB MD with umbrella restraint
  &cntrl
-   irest = 1, ntx = 5,                     ! restart and read velocities
-   nstlim = 500,                          ! simulation length (step limit)
-   dt = 0.001,                             ! integration time (ps)
-   ntpr = 250, ntwx = 250,                 ! print freq of energy and coordinats
-   ioutfm = 1,                             ! flag for binary coordinates              
-   ntc = 2, ntf = 2, tol = 1e-8,           ! SHAKE for all bonds to hydrogen
-   ntt = 3, temp0 = 310.0, gamma_ln = 1.0, ! Langevin dynamics 
-   nmropt = 1                              ! flag to read "nmr restraints"
+  irest=1, ntx=5,
+  nstlim=1000, ntpr=500, ntwx=500,
+  ioutfm = 1,
+  ntc=2, ntf=2, tol=1e-08,
+  ntt=3, temp0=310.0, gamma_ln=5.0,
+  nmropt=1, 
+  ig=-1
  /
- &wt type='DUMPFREQ', istep1 = 250, /      ! print frequency for restrained coordinates
- &wt type='END', /
- DISANG=DMP_US_@n@.RST
- DUMPAVE=DMP_US_@n@.TRACE
+ &wt type='DUMPFREQ', istep1=500 /
+ &wt type='END' /
+ DISANG=DMP_US.RST
+ DUMPAVE=DMP_US.TRACE
  LISTIN=POUT
- LISTOUT=POUT
-

@@ -195,7 +195,7 @@ for the accessory files specified in ENGINE_INPUT_EXTFILES.
             if replica_run_time < 1:
                 replica_run_time = 1
         else:
-            replica_run_time = self.keywords.get('REPLICA_RUN_TIME')
+            replica_run_time = int(self.keywords.get('REPLICA_RUN_TIME'))
         # double it to give time for current running processes 
         # and newly submitted processes to complete
         replica_run_time = 2*replica_run_time

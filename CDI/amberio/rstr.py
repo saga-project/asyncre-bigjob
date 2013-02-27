@@ -27,7 +27,7 @@ def ReadAmberRestraintFile(rstFilename):
     amberRst - AmberRestraint object (list of NmroptRestraint)
     """
     from namelist import ReadNamelists
-    amberRst = AmberRestraint()
+    amberRstr = AmberRestraint()
     # Read the namelists from the restraint file and look for &rst namelists
     namelists = ReadNamelists(rstFilename)
     for nl in namelists:
@@ -36,20 +36,20 @@ def ReadAmberRestraintFile(rstFilename):
             if not nl.has_key('iat'):
                 msg = "'iat' must be specified to define an nmropt restraint."
                 raise Exception(msg)
-            amberRst.append( NmroptRestraint(nl.pop('iat'),**nl) )
-    if len(amberRst) < 1:
+            amberRstr.append( NmroptRestraint(nl.pop('iat'),**nl) )
+    if len(amberRstr) < 1:
         raise Exception('No &rst namelists found in file: %s'%rstFilename)
-    return amberRst
-                    
+    return amberRstr
+
 class AmberRestraint(list):
     """
     A collection (list) of NmroptRestraints defining an AMBER restraint energy.
 
     (See NmroptRestraint for further details.)
     """
-    def __init__(self,*rsts):
+    def __init__(self,*rstrs):
         list.__init__(self)
-        for rst in rsts: self.extend(rst)
+        for rstr in rstrs: self.extend(rstr)
         
     def append(self, item):
         if not isinstance(item, NmroptRestraint):
@@ -61,6 +61,32 @@ class AmberRestraint(list):
             for item in items:
                 self.append(item)
             
+    def SetRestraintParameters(self,**rstr_params):
+        """
+        Convenience function for setting any of r0, r1, r2, r3, r4, k0, rk2, and
+        rk3 by list assignment. 
+
+        Parameters will be assigned in order until either no parameters or 
+        restraints are left. Thus, paramaters can be set for restraints 1 and 2,
+        but not 1 and 3. For the latter case the individual restraints must
+        be modified directly.
+        """
+        nrstrs = len(self)
+        for params,values in rstr_params.iteritems():
+            nvalues = len(values)
+            # case 1: more restraints than parameter values
+            if nrstrs >= nvalues:
+                for i,value in enumerate(values):
+                    self[i].SetRestraintParameters(**{params:float(value)})
+            # case 1: more parameter values than restraints 
+            #         (better to ask for forgiveness than permission)
+            else:
+                print ('Warning: %d restraint parameters were specified, but'
+                       ' only %s restraints are defined.'%(nvalues,nrstrs))
+                for i,rstr in enumerate(self):
+                    value = float(rstr_params[params][i])
+                    rstr.SetRestraintParameters(**{params:value})
+
     def Energy(self,crds):
         """Calculate the total energy from all restraints.
 
@@ -235,20 +261,18 @@ class NmroptRestraint(object):
             else: # all distance restraints
                 self.r[0] = r0 - 500.
                 self.r[3] = r0 + 500.
+            # Use radians for angle and torsion calculations
+            if self.rstType == 'Angle' or self.rstType == 'Torsion':
+                self.r = [ r*pi/180. for r in self.r ]
         # otherwise the four positions need to be set individually.
-        else:          
-            if rstr_params.has_key('r1'): 
-                self.r[0] = float(rstr_params['r1'])
-            if rstr_params.has_key('r2'): 
-                self.r[1] = float(rstr_params['r2'])
-            if rstr_params.has_key('r3'): 
-                self.r[2] = float(rstr_params['r3'])
-            if rstr_params.has_key('r4'): 
-                self.r[3] = float(rstr_params['r4'])
-
-        # Use radians for angle and torsion calculations
-        if self.rstType == 'Angle' or self.rstType == 'Torsion':
-            self.r = [ r*pi/180. for r in self.r ]
+        else:
+            rs = {'r1':0,'r2':1,'r3':2,'r4':3}
+            for r,i in rs.iteritems():
+                if rstr_params.has_key(r):
+                    self.r[i] = float(rstr_params[r])
+                    # Use radians for angle and torsion calculations
+                    if self.rstType == 'Angle' or self.rstType == 'Torsion':
+                        self.r[i] = self.r[i]*pi/180.
 
         # Check the relative restraint positions.
         if not self.r[0] <= self.r[1] <= self.r[2] <= self.r[3]:

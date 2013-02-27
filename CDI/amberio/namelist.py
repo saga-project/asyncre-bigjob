@@ -6,6 +6,11 @@ DESCRIPTION:
 AUTHOR: Tim Giese (TJG) - <giese@biomaps.rutgers.edu>
         Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
 """
+__all__ = ['NamelistCollection','Namelist','ReadEverythingExceptNamelists',
+           'ReadNamelists']
+
+import re
+
 class NamelistCollection(list):
     """A list of namelists with easy access to namelist keys and values.
     """
@@ -162,7 +167,6 @@ def ReadEverythingExceptNamelists(filename):
     Read a file containing Fortran namelists. Return a list of the lines that do
     NOT contain anything inside a namelist.
     """
-    import re
     fileLines = open(filename,'r').readlines()
     for i in range(len(fileLines)):
         fileLines[i] = re.sub(r"^(.*?)!.*$",r"\1",fileLines[i])
@@ -185,7 +189,6 @@ def ReadNamelists(filename):
     Read a file containing Fortran namelists. Return a list of (dict-derived)
     Namelist objects for each namelist found.
     """
-    import re
     fileLines = open(filename,'r').readlines()
     for i in range(len(fileLines)):
         fileLines[i] = re.sub(r"^(.*?)!.*$",r"\1",fileLines[i])

@@ -1,6 +1,6 @@
 import random, math # Only used in the now deprected _doExchange_pair()
 from pj_async_re import async_re_job
-from amber_async_re import pj_amber_job, BOLTZMANN_CONSTANT
+from amber_async_re import pj_amber_job, KB
 class amberus_async_re_job(pj_amber_job,async_re_job):
 
     def _checkInput(self):
@@ -9,6 +9,17 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         if self.keywords.get('RE_TYPE') != 'AMBERUS':
             self._exit("RE_TYPE is not AMBERUS")
 
+        # Check that all umbrellas are the same temperature.
+        # The reduced energies calculated in this module do not account for
+        # replicas running at different temperatures.
+        temp0 = self._checkStateParamsAreSame('temp0','cntrl')
+        if not temp0:
+            self._exit('All temperatures MUST be the same when using AMBERUS.')
+        self.beta = 1./(KB*temp0)
+
+        # ============================
+        # Umbrella Sampling Parameters
+        # ============================
         # Quick function to convert delimited state parameters to a 2d list
         def ParseStateParams(paramline, state_delimiter=':'):
             if [paramline] == paramline.split(state_delimiter):
@@ -39,14 +50,6 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
                    ' FORCE_CONSTANTS and %d BIAS_POSITIONS'%(n,nK0,nR0))
             self._exit(msg)
                    
-        # Check that all umbrellas are one temperature.
-        # The reduced energies calculated in this module do not account for
-        # replicas running at different temperatures.
-        temp0 = self._checkStateParamsAreSame('temp0','cntrl')
-        if not temp0:
-            self._exit('All temperatures MUST be the same when using AMBERUS.')
-        self.beta = 1./(BOLTZMANN_CONSTANT*temp0)
-
         # Look for a restraint template (try the basename?)
         if self.keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
             restraint_template = '%s.RST'%self.basename
@@ -56,18 +59,13 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
             print 'Using restraint template file: %s'%restraint_template
 
         # Read the restraint template and then modify the restraint objects 
-        # based on the input,
-        # NB: For simplicity, hardcode all restraint files to have the same 
-        #     name. Each replica will simply overwrite this file at each cycle.
-        for state in self.states:
+        # based on the input. For simplicity, hardcode all restraint files to 
+        # have the name US.RST. Each replica will simply overwrite this file at
+        # each cycle.
+        for n,state in enumerate(self.states):
             state.AddRestraints(restraint_template)
             state.mdin.SetVariableValue('DISANG','US.RST',None)
-        bias_dimensions = len(kbias[:][0])
-        for n in range(self.nreplicas):
-            for m in range(bias_dimensions): 
-                k  = float(kbias[n][m])
-                r0 = float(posbias[n][m])
-                self.states[n].rstr[m].SetRestraintParameters(r0=r0,k0=k)
+            state.rstr.SetRestraintParameters(r0=posbias[n],k0=kbias[n])
 
     def _buildInpFile(self, repl):
         """
