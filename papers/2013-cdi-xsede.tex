@@ -1,0 +1,163 @@
+\documentclass{sig-alternate}
+
+\usepackage{url} 
+\usepackage{subfigure} 
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{xspace}
+
+
+\usepackage[font=footnotesize]{subfig}
+\DeclareCaptionType{copyrightbox}
+\hyphenation{op-tical net-works semi-conduc-tor}
+
+\newif\ifdraft
+\drafttrue
+\ifdraft
+\newcommand{\tbnote}[1]{ {\textcolor{magenta} { ***TcB: #1 }}}
+\newcommand{\jhanote}[1]{ {\textcolor{red} { ***SJ: #1 }}}
+\newcommand{\note}[1]{ {\textcolor{blue} { ***NOTE: #1 }}}
+\newcommand{\abhi}[1]{ {\textcolor{green} { ***Abhinav: #1 }}}
+\newcommand{\hfnote}[1]{ {\textcolor{cyan} { ***HF: #1 }}}
+\newcommand{\rajib}[1]{ {\textcolor{blue} { ***RM: #1 }}}
+\else
+\newcommand{\rajib}[1]{}
+\newcommand{\jhanote}[1]{}
+%\newcommand{\note}[1]{ {\textcolor{blue} { ***NOTE: #1 }}}
+\newcommand{\note}[1]{ {}}
+\newcommand{\abhi}[1]{ {}}
+\newcommand{\hfnote}[1]{}
+\newcommand{\tbnote}[1]{ {}}
+\fi
+
+\newcommand{\pilotjob}{Pilot-Job\xspace}
+\newcommand{\pilotjobs}{Pilot-Jobs\xspace}
+\newcommand{\pilotdata}{Pilot-Data\xspace}
+\newcommand{\pilotapi}{Pilot-API\xspace}
+
+\begin{document}
+
+\conferenceinfo{XSEDE13}{'13 }
+ \CopyrightYear{2013}
+
+\title{}
+
+% \numberofauthors{5} 
+% \author{
+% \alignauthor
+%  \\
+%        \affaddr{x}\\
+%        \affaddr{x}\\
+%        \email{x}
+% % 2nd. author
+% \and  % use '\and' if you need 'another row' of author names
+% % 3rd. author
+% \alignauthor 
+% B \\
+%        \affaddr{xxxy}\\
+%        \affaddr{xxx}\\
+%        \email{xxx}
+% % 5th. author
+% \alignauthor 
+% C \\
+%        \affaddr{Rutgers University}\\
+%        \affaddr{Piscataway, NJ 08854}\\
+%        \email{xxx}
+% }
+
+\maketitle
+
+\begin{abstract}
+
+  A description of the computational workflow, viz., the different
+  machines/resources used, how many ensembles we simulated, data
+  volumnes managed etc., (ii) any computational performance issues
+  including (a) measuring "efficiency" as the number of distributed
+  resources utilized goes as measured by $T_c$ (time to completion),
+  (b) $T_c$ as a function of the number of replicas, and (iii) a
+  description of the software infrastructure that is employed to
+  enable distributed replica-exchange on XSEDE.
+
+\end{abstract}
+
+\category{H.4}{Information Systems Applications}{Miscellaneous}
+%A category including the fourth, optional field follows...
+\category{D.2.8}{Software Engineering}{Metrics}[complexity measures, performance measures]
+
+\terms{Experience, Technology}
+
+\keywords{HPC, Distributed Computing, NAMD, MD, Large Scale, XSEDE
+  resources}
+
+\section{Introduction}
+
+
+\jhanote{Describe the need for large-scale simulations. Describe what
+  is unique to replica-exchange. Challenges that arise from loose,
+  intermittent (stochastic) coupling, as opposed to fixed exchanges}
+
+\section{Scientific Problem}\label{sec:requirements}
+
+\jhanote{RE represents the core coordination/communication pattern for
+  a class of problems}
+
+\subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
+
+\subsection{Computational Requirements}
+
+\section{Software Environment}
+
+\subsection{BigJob}
+
+\subsection{Async Replica-Exchange}
+
+\section{Results on XSEDE }\label{sec:results}
+
+\subsection{Systems Investigated} 
+
+(i) Systems 1 -3 , (ii) $N_R$ vary from 4, 16, 32, 64, 128, 512, (iii)
+$T_c = T_W + T_Q$ where terms are total time to completion, run time,
+time waiting in queue.  (iv) each exchange takes place approximately
+1ps (v) each replica runs for 1ns
+
+
+\subsection{Computational Configuration}
+(i) Fixed num. of cores [Fixed Pilots, varying resources] (ii) ``Flood"
+XSEDE -- minimize the Time to Wait
+
+\section{Discussion}
+
+\jhanote{Overall Productivity is Scientific efficiency vs. Computing
+  efficiency!}
+
+\subsubsection{Issue of Resiliency/Redundacy} Emilio has interesting
+antidotes -- nodes crashing and RE starts limping but as nodes got
+rebooted, started speeding up.  Experience --> Old to New Aspects
+\texttt{get\_state()} - State monitoring capability
+
+
+\subsection{Future Work}
+
+\subsubsection{Multiple pilots}
+
+% \subsubsection{Local}
+\subsubsection{Logically Distributed}
+\subsubsection{Physically Distributed}
+
+\subsection{Different Exchange Modes}
+\subsection{Other}
+
+
+
+\section*{Acknowledgement}
+\footnotesize{Additional important
+  funding has been provided by NSF-ExTENCI (OCI-1007115) Important
+  funding for SAGA has been provided by the UK EPSRC grant number
+  GR/D0766171/1 (via OMII-UK) and HPCOPS NSF-OCI 071087. Bishop were
+  supported by NIH-R01GM076356.}
+
+\bibliographystyle{abbrv}
+%\bibliography{saga,saga-old,literature,replica-exchange}
+%\bibliography{saga2,literature,replica-exchange}
+
+\end{document}
