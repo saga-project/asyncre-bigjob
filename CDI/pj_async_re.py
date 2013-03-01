@@ -254,7 +254,7 @@ for the accessory files specified in ENGINE_INPUT_EXTFILES.
              "working_directory": self.keywords.get('BJ_WORKING_DIR'),
              "queue":self.keywords.get('QUEUE'),
              "processes_per_node":self.ppn,
-	     "allocation":self.keywords.get('PROJECT'),
+	     "project":self.keywords.get('PROJECT'),
              "walltime":int(self.keywords.get('WALL_TIME'))}
          
 	#pilotjob: Create pilot job with above description
