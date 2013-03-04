@@ -1,0 +1,12 @@
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r0.rst7 
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r1.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r2.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r3.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r4.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r5.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r6.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r7.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r8.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r9.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r10.rst7
+-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r11.rst7

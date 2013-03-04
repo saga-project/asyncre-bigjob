@@ -29,10 +29,16 @@ def AngleAndGradients(crds,i,j,k):
     return Angle(crds,i,j,k),drdxi,drdxj,drdxk
 
 def AngleFromVecs(a,b,c):
+    # This is how it is done in src/sander/nmr.F90, subroutine angnrg
     rBA = BondFromVecs(b,a)
     rBC = BondFromVecs(b,c)
-    rAC = BondFromVecs(a,c)
-    return acos( (rBA**2 + rBC**2 - rAC**2) / (2.*rBA*rBC) )
+    cos_angle = VecDot(VecDiff(b,a),VecDiff(b,c)) / (rBA*rBC)
+    if cos_angle >= 1.: 
+        return 0. # = acos(1)
+    elif cos_angle <= -1.: 
+        return pi # = acos(-1)
+    else:
+        return acos(cos_angle)
 
 def Dihedral(crds,i,j,k,l):
     vi = crds[3*i:3*(i+1)]
@@ -50,6 +56,8 @@ def DihedralAndGradients(crds,i,j,k,l):
     return Dihedral(crds,i,j,k,l),drdxi,drdxj,drdxk,drdxl
 
 def DihedralFromVecs(a,b,c,d):
+    # This is not exactly consistent with AMBER, as the derivative becomes
+    # not well defined when the dihedral is 0 or pi.
     vAB = VecDiff(a,b)
     vBC = VecDiff(b,c)
     vCD = VecDiff(c,d)
@@ -58,11 +66,15 @@ def DihedralFromVecs(a,b,c,d):
     denom = VecMag(nABC)*VecMag(nBCD)
     dihedral = 0.
     if denom > 1.e-30:
-        cosphi = -VecDot(nABC,nBCD)/denom
-        if cosphi <= -1.:  dihedral = pi
-        elif cosphi >= 1.: dihedral = 0.
-        else:              dihedral = acos(cosphi)
-        if VecDot(vBC,VecCross(nABC,nBCD)) > 0.: dihedral *= -1.
+        cos_dihedral = -VecDot(nABC,nBCD)/denom
+        if cos_dihedral <= -1.:  
+            dihedral = pi
+        elif cos_dihedral >= 1.: 
+            dihedral = 0.
+        else:              
+            dihedral = acos(cos_dihedral)
+        if VecDot(vBC,VecCross(nABC,nBCD)) > 0.: 
+            dihedral *= -1.
         dihedral = pi - dihedral
     return dihedral
 

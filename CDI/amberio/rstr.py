@@ -345,6 +345,16 @@ class NmroptRestraint(object):
             drdx[3*j:3*(j+1)] = drdxj
             drdx[3*k:3*(k+1)] = drdxk
             drdx[3*l:3*(l+1)] = drdxl
+            # Get the closest periodic image/phase for torsions.
+            rmean = (self.r[1] + self.r[2])/2.
+            isNearestImage = False
+            while not isNearestImage:
+                if r - rmean > pi:
+                    r -= 2*pi
+                elif rmean - r > pi:
+                    r += 2*pi
+                else:
+                    isNearestImage = True
         elif self.rstType == 'Gen. Dist. Coord.':
             for k in range(len(self.rstwt)):
                 i = self.iat[2*k+0] - 1
