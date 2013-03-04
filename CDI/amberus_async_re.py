@@ -159,6 +159,8 @@ if __name__ == '__main__':
 
     BIGJOB_VERBOSE=100
 
+    start_time = time.time()
+    
     # Parse arguments:
     usage = "%prog <ConfigFile>"
     
@@ -183,3 +185,6 @@ if __name__ == '__main__':
     rx.setupJob()
 
     rx.scheduleJobs()
+
+    total_run_time = time.time() - start_time
+    print "Total Run Time: "+total_run_time

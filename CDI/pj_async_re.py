@@ -383,7 +383,15 @@ Returns true if a replica has exited (done or failed)
        	#pilotjob: Get status of the compute unit
 	#pilotjob: Query the replica to see if it is in the done state
         state = self.cus[replica].get_state()
+        details = self.cus[replica].get_details()
+
         if state == "Done" or state == "Failed" or state == "Canceled":
+            if details.has_key("start_time"):
+                if details.has_key("end_time"):
+                    print "*********************************************************"
+                    print "Replica: "+replica+"Start Time: "+float(details["start_time"])+"End Time: "+float(details["end_time"])
+            if details.has_key("end_queue_time"):
+                print "End Queue Time: "+float(details["end_queue_time"])+"\n"
             return True
         else:
             return False
@@ -458,6 +466,7 @@ if CPU's are available.
 Randomly selects a pair of replicas in wait state for exchange of 
 thermodynamic parameters. 
 """
+        print "Entering doExchanges Method: "+time.time()
         # find out which replicas are waiting
         self._update_running_no()
         if self.waiting > 1:
@@ -490,5 +499,5 @@ thermodynamic parameters.
                 self.status[repl_a]['running_status'] = "W"
                 self.status[repl_b]['running_status'] = "W"
 
-
+        print "Exiting doExchanges Method: "+time.time()
 
