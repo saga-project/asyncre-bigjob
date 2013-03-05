@@ -377,7 +377,7 @@ class pj_amber_job(async_re_job):
             #     repl_j = replicas_waiting[self._weighted_choice_sub(ps)]
             #     if repl_i != repl_j:
             #         if self.verbose: 
-            #             self._printExchangePairReport(repl_i,repl_j,
+            #             self._printExchange_PairReport(repl_i,repl_j,
             #                                           U[sid_i][repl_i],
             #                                           U[sid_j][repl_j],
             #                                           U[sid_i][repl_j],

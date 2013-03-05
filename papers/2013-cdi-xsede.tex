@@ -40,7 +40,8 @@
 \conferenceinfo{XSEDE13}{'13 }
  \CopyrightYear{2013}
 
-\title{}
+ \title{A Framework for Flexible and Scalable Replica-Exchange on
+   Production Distributed CI}
 
 % \numberofauthors{5} 
 % \author{
@@ -96,6 +97,19 @@
   is unique to replica-exchange. Challenges that arise from loose,
   intermittent (stochastic) coupling, as opposed to fixed exchanges}
 
+\jhanote{(i) algorithmic advances coupled with infrastructural
+  advances. (ii) the need for dynamic execution and resource
+  management, (iii) which is why we believe pilot-jobs is a good
+  abstraction (reference earlier work using BigJob). (iv) Novelty of
+  this work is: (A) marriage of an application library for flexible
+  replica-exchange simulations with scalable and dynamic resource
+  management, (B) demonstration of a framework for different and
+  tunable replica coupling schemes that can be used for QM and
+  classical examples.}
+ 
+\jhanote{Aim of this work is to present (i) the framework -- both
+  components, (ii) understand and characterize basic performance}
+  
 \section{Scientific Problem}\label{sec:requirements}
 
 \jhanote{RE represents the core coordination/communication pattern for
@@ -119,6 +133,8 @@
 
 \subsection{Performance Model}
 
+\jhanote{Ole}
+
 \subsection{Systems Investigated} 
 
 (i) Systems 1 -3 , (ii) $N_R$ vary from 4, 16, 32, 64, 128, 512, (iii)
@@ -136,6 +152,8 @@ XSEDE -- minimize the Time to Wait
 \jhanote{Overall Productivity is Scientific efficiency vs. Computing
   efficiency!}
 
+\subsection{Experience}
+
 \subsubsection{Issue of Resiliency/Redundacy} Emilio has interesting
 antidotes -- nodes crashing and RE starts limping but as nodes got
 rebooted, started speeding up.  Experience --> Old to New Aspects
@@ -150,8 +168,10 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 \subsubsection{Logically Distributed}
 \subsubsection{Physically Distributed}
 
-\subsection{Different Exchange Modes}
-\subsection{Other}
+\subsubsection{Different Exchange Modes}
+
+
+\subsection{Conclusion}
 
 
 
