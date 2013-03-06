@@ -180,10 +180,7 @@ class pj_amber_job(async_re_job):
         # TODO: Parse the output file and look for more sure signs of 
         #       completion?
         rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
-        if os.path.exists(rst):
-            return True
-        else:
-            return False
+        return os.path.exists(rst)
 
     def _linkReplicaFile(self, link_filename, real_filename, repl):
         """

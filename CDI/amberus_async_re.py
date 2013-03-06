@@ -1,3 +1,4 @@
+import os
 import random, math # Only used in the now deprected _doExchange_pair()
 from pj_async_re import async_re_job
 from amber_async_re import pj_amber_job, KB
@@ -154,6 +155,27 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         u_ij = self.states[state_i].rstr.Energy(crds_j)
         return self.beta*u_ij
 
+    def _extractLastCoordinates(self,repl):
+        """
+        Returns a Nrestraint list of coordinates from the last nmropt trace file
+        of a given replica.
+        """
+        cyc = self.status[repl]['cycle_current']
+        trace = 'r%d/%s_%d.TRACE'%(repl,self.basename,cyc)
+        for line in open(trace,'r'):
+            coords = line.strip().split()[1:]
+        return [ float(x) for x in coords ]
+
+    def _hasCompleted(self,repl,cyc):
+        # If the normal criteria isn't met, then return False.
+        if not pj_amber_job._hasCompleted(self,repl,cyc):
+            return False
+        else:
+            # Test the added criteria that a trace file was written
+            trace = 'r%d/%s_%d.TRACE'%(repl,self.basename,cyc)
+            return os.path.exists(trace)
+
+
 if __name__ == '__main__':
     import sys, time
 
@@ -187,4 +209,4 @@ if __name__ == '__main__':
     rx.scheduleJobs()
 
     total_run_time = time.time() - start_time
-    print "Total Run Time: "+total_run_time
+    print "Total Run Time: %f"%float(total_run_time)

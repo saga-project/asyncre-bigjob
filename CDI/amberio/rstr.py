@@ -97,7 +97,10 @@ class AmberRestraint(list):
         energy - total restraint energy (in kcal/mol)
         """
         energy = 0.
-        for rst in self: energy += rst.Energy(crds)
+        if len(crds) == len(self):
+            for rst,r in zip(self,crds): energy += rst.Energy(r)
+        else:
+            for rst in self: energy += rst.Energy(crds)
         return energy
 
     def EnergyAndGradients(self,crds):
@@ -135,7 +138,10 @@ class AmberRestraint(list):
         """
         energy = { 'Restraint':0., 'Bond':0., 'Angle':0., 'Torsion':0.,
                   'Gen. Dist. Coord.':0. }
-        for rst in self: energy[rst.rstType] += rst.Energy(crds)
+        if len(crds) == len(self):
+            for rst,r in zip(self,crds): energy[rst.rstType] += rst.Energy(r)
+        else:
+            for rst in self: energy[rst.rstType] += rst.Energy(crds)
         eRestraint = 0.
         for key in energy.keys(): eRestraint += energy[key]
         energy['Restraint'] = eRestraint
@@ -396,7 +402,13 @@ class NmroptRestraint(object):
 
         x - either Angstroms or radians
         """
-        r,drdx = self.CoordAndGradients(crds)
+        if isinstance(crds,float) or isinstance(crds,int):
+            r = float(crds)
+            drdx = [ 0. ]
+            if self.rstType == 'Angle' or self.rstType == 'Torsion':
+                r *= pi/180.
+        else:
+            r,drdx = self.CoordAndGradients(crds)
         dedr = 0.
         energy = 0.
         # The following is the harmonic, flat-bottomed well described in the
@@ -539,6 +551,7 @@ if __name__ == '__main__':
     crds = None
     anames = None
     if argc > 2:
+        import amberio.ambertools
         from chemistry.amber.readparm import rst7
         crdFile = sys.argv[2]
         print 'Reading coordinates from file: %s'%crdFile
@@ -569,7 +582,7 @@ if __name__ == '__main__':
         print 'RESTRAINT  = %12.4f'%e
         print 'Forces (same format as forcedump.dat)'
         for i in range(0,len(g),3):
-            print ' % 18.16e % 18.16e % 18.16e'%(-g[i+0],-g[i+1],-g[i+2])           
+            print ' % 18.16e % 18.16e % 18.16e'%(-g[i+0],-g[i+1],-g[i+2])
     print
     print 'writing a new restraint file to stdout:'
     print '>>> rstTest.WriteAmberRestraintFile(sys.stdout)'

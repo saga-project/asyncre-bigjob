@@ -389,9 +389,14 @@ Returns true if a replica has exited (done or failed)
             if details.has_key("start_time"):
                 if details.has_key("end_time"):
                     print "*********************************************************"
-                    print "Replica: "+replica+"Start Time: "+float(details["start_time"])+"End Time: "+float(details["end_time"])
+                    print ('Replica: %d Start Time: %f End Time: %f'%
+                           (replica,float(details['start_time']),
+                            float(details['end_time'])))
+                                                                     
+                    #print "Replica: "+str(replica)+"Start Time: "+float(details["start_time"])+"End Time: "+float(details["end_time"])
             if details.has_key("end_queue_time"):
-                print "End Queue Time: "+float(details["end_queue_time"])+"\n"
+                print 'End Queue Time: %f\n'%float(details["end_queue_time"])
+                #print "End Queue Time: "+float(details["end_queue_time"])+"\n"
             return True
         else:
             return False
