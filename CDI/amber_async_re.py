@@ -160,7 +160,7 @@ class pj_amber_job(async_re_job):
         #pilotjob: Compute Unit (i.e. Job) description
         cpt_unit_desc = {
             "executable": self.exe,
-            "environment": ['AMBERHOME=%s'%AMBERHOME],
+            "environment": [], # ['AMBERHOME=%s'%AMBERHOME],
             "arguments": args,
             "output": stdout,
             "error": stderr,   
