@@ -123,119 +123,149 @@
 
 \section{Software Environment}
 
-XSEDE is inherently a very complex infrastructure. Given
-the wide range of user groups and application use cases it
-aims to address, and the large number and the diversity
-of participating resource providers, this is to be expected.
-Complex systems are though usually very difficult to use, as
-that complexity and the underlying resource diversity often
-translates into complicated user tools and interfaces. The
-relatively clean architecture of XSEDE is, to some extent,
-addressing this problem, but is, in itself and at this point in
-time, a moving target.
+XSEDE is inherently a complex infrastructure with heterogeneous
+resources. In order to harness the power of such a distributed
+environment, we utilize Pilot-Jobs. A Pilot-Job is a mechanism by 
+which a proxy for the actual simulations
+is submitted on the resource to be utilized; this proxy agent in turn,
+is given responsibility to convey to the application the availabilty
+of resources and also influence which tasks are executed. The
+abstraction of a Pilot-Job generalizes the reoccurring concept of
+utilizing a placeholder job as a container for a set of compute tasks;
+instances of that placeholder job are commonly referred to as
+Pilot-Jobs or pilots. 
 
-In order to address this problem, we utilize Pilot-Jobs
-to harness the power of the distributed, heterogeneous XSEDE
-resources. A pilot-job is a mechanism by
-which a proxy for the actual simulations is submitted on the
-resource to be utilized; this proxy agent in turn, is given
-responsibility to convey to the application the availabilty of
-resources and also influence which tasks are executed. The
-abstraction of a Pilot-Job generalizes the reoccurring concept
-of utilizing a placeholder job as a container for a set of
-compute tasks; instances of that placeholder job are commonly referred 
-to as Pilot-Jobs or pilots. Analagous to Pilot-Jobs, Pilot-Data is used to seperate the allocation of physical storage and application-level data units. 
+In general, Pilot-Abstractions provide a suitable means to marshal
+heterogeneous sets of both compute and data resources and support the
+efficient utilization of different kinds of commercial as well science
+cloud resources. Pilot-Abstractions have been extensively used on both
+HPC and HTC infrastructures for a range of application scenarios as a
+resource management abstraction to, (i) improve the utilization of
+resources, (ii) to reduce wait times of a collection of tasks, (iii)
+to facilitate bulk or high-throughput simulations where multiple jobs
+need to be submitted which would otherwise saturate the queuing
+system, and (iv) as a basis to implement application specific
+execution, scheduling and policy decisions
 
-In general, Pilot-Abstractions provide a suitable means to marshal heterogeneous sets of both compute and data resources and support the efficient utilization of different kinds of commercial as well science cloud resources. Pilot-Abstraction have been extensively used on both HPC and HTC infrastructures for a range of application scenarios as a resource management abstraction to, (i) improve the utilization of resources, (ii) to reduce wait times of a collection of tasks, (iii) to facilitate bulk or high-throughput simulations where multiple jobs need to be submitted which would otherwise saturate the queuing system, and (iv) as a basis to implement application specific execution, scheduling and policy decisions
-
-The P* model~\cite{pstar}, Pilot-Abstractions model, worked to clearly define the computation and data components of a distributed application as 'compute units' and 'data units' in the context of Pilot-Jobs and Pilot-Data. A compute unit describes a self-containing piece of work, e.g. a computational task that potentially operates on a set of input data, while a data unit is a container for a logical group of data that is often accessed together or comprises a larger set of data; e.g. a data file or chunk.
+The P* model~\cite{pstar}, a model for Pilot-Abstractions, worked to clearly
+define the computation and data components of a distributed
+application as 'compute units' and 'data units' in the context of
+Pilot-Jobs and Pilot-Data. A compute unit describes a self-containing
+piece of work, e.g. a computational task that potentially operates on
+a set of input data, while a data unit is a container for a logical
+group of data that is often accessed together or comprises a larger
+set of data; e.g. a data file or chunk.
 
 
 \subsection{BigJob: A Pilot-based Framework}
 
-A specific implementation of the P* model is BigJob, which provides a framework for running many types of distributed applications -- including but not limited to very-large scale parallel simulations, many small high-throughput simulations, or ensemble-based workflows. Consistent with the P* model, BigJob (BJ) and the BigData (BD) extension provide a unified runtime environment for Pilot-Jobs and Pilot-Data on heterogeneous infrastructures. For this purpose, BigJob provides a higher-level, unifying interface to heterogeneous and/or distributed data and compute resources. The framework is accessed via the Pilot-API, which provides two key abstractions: Pilot-Job and Pilot-Data.
+%A specific implementation of the P* model is 
+BigJob is a pilot-job system implementation which provides a framework
+for running many types of distributed applications -- including but
+not limited to very-large scale parallel simulations, many small
+high-throughput simulations, or ensemble-based workflows. Consistent
+with the P* model, BigJob (BJ) provides a unified runtime
+environment for Pilot-Jobs on heterogeneous
+infrastructures. For this purpose, BigJob provides a higher-level,
+unifying interface to heterogeneous and/or distributed data and
+compute resources. The framework is accessed via the Pilot-API, which
+provides two key abstractions: Pilot-Job and Pilot-Data.
 
-Applications can specify their resource requirements using a Pilot description. In the compute case, the user typically specifies the application to run as well as the number of cores required by their application. A Pilot-Data is defined using a service URL containing the reference to a storage resource. Pilots are started via the Pilot-Compute Service respectively the Pilot-Data Service.
+Applications can specify their resource requirements using a Pilot
+description. In the compute case, the user typically specifies the
+application to run as well as the number of cores required by their
+application.  Pilots are started via the Pilot-Compute Service. BigJob 
+eliminates the need to interact with different kinds of compute
+resources, e. g. batch-style HPC/HTC resources as well as cloud
+resources, and provides a unified abstraction for allocating
+resources. 
 
-BigJob eliminates the need to interact with different kinds of compute resources, e. g. batch-style HPC/HTC resources as well as cloud resources, and provide a unified abstraction for allocating resources. Similarly, BigData removes the need to interoperate with different data sources and stores, e. g. object stores, parallel filesystems, repositories, databases etc., by providing a virtualized data service layer, which can be used to allocated and access a heterogeneous set of data sources and stores.
+BigJob has seen its widest usage across the heterogeneous resources
+that XSEDE provides. Simple installation into user space on any
+resource that supports Python 2.5 or greater makes the uptake of
+BigJob easy for the end user. BigJob supports thousand of jobs and
+millions of SUs on XSEDE and has been at the heart of two recent and
+successful ECSS projects.
 
-BigJob has seen its widest usage across the heterogeneous resources that XSEDE provides. Simple installation into user space on any resource that supports Python 2.5 or greater makes the uptake of BigJob easy for the end user. BigJob supports thousand of jobs (millions of SUs) and has been at the heart of two recent and successful ECSS projects. BigJob has historically been used for parameter sweeps, many instances of the same task (ensemble), chained tasks, loosely coupled but distinct tasks, as well as tasks with data or compute dependencies.
+% BigJob has historically been used for parameter sweeps, many instances
+% of the same task (ensemble), chained tasks, loosely coupled but
+% distinct tasks, as well as tasks with data or compute dependencies.
 
-% Note much more to come on BigJob
+\subsection{SAGA: Interoperability Layer}
 
-\subsubsection{SAGA: Interoperability Layer}
+In order for BigJob to work on heterogeneous resources, it requires an
+interoperability layer which provides access to a variety of
+middleware.  This is acheived through the use of The Simple API for Grid Applications (SAGA).
+SAGA defines a 
+high-level access mechanism for distributed infrastructure components 
+like job schedulers, file transfers, and resource provisioning services. 
+Given the heterogeneity of distributed infrastructures, SAGA provides 
+a much needed interoperability layer that lowers the complexity and 
+improves the simplicity of using distributed infrastructure whilst 
+enhancing the sustainability of distributed applications, services, and tools.
 
+SAGA is an Open Grid Forum (OGF) recognized standard (GFD.90). 
+It allows developers of distributed applications to construct
+higher-level functionality and abstractions, such as
+gateways, workflows, application management systems, and runtime
+environments. The key advantages to running with SAGA on XSEDE
+is that users do not need to worry about the individual batch
+queueing systems implemented on the various machines. Using the 
+SAGA API and appropriate job adaptors, the different submission
+mechanisms for these queueing systems is handled on the SAGA backend,
+which is transpart to the user.
 
-In order for BigJob to work on heterogeneous resources, it requires
-an interoperability layer which provides access to a variety of middleware.
-The Simple API for Grid Applications (SAGA) provides a well 
-defined and stable API, which exposes those operations which
-are required on application level, but encapsulates the complexity 
-of translating them into the respective operations on
-the XSEDE infrastructure. In other words: SAGA tries to
-move the complexity of dealing with distributed cyberinfrastructures 
-like XSEDE out of the application, and into the 
-SAGA implementation layer, while providing the semantics 
-necessary to efficiently implement distributed applications 
-which can utilize XSEDE.
+The SAGA API has been used to provide almost complete
+coverage over nearly all grid and distributed computing
+middleware/systems, including but not limited to Condor, Genesis,
+Globus, UNICORE, SGE, LSF/PBS/Torque, and Amazon EC2.
 
-SAGA is an implementation of an Open Grid Forum (OGF) Technical 
-Specification that provides a common and consistent high-level 
-API for the most commonly required functionality to construct 
-distributed applications. It also provides a high-level API to 
-construct tools and frameworks to support distributed applications. 
-The functional areas that are supported by SAGA include job-submission,
-file transfer and access, as well as support for data streaming and distributed 
-coordination. SAGA provides both a syntactic and semantic unification via a 
-single interface to access multiple, semantically distinct middleware distributions.
+\subsection{Deployment of BigJob into User Space}
 
-The key advantages of the development using SAGA include, but 
-are not limited to: i) to provide a general-purpose, commonly used yet standardized functionality, while hiding complexity of heterogeneity of back-end resources, 
-ii) to provide building blocks for constructing higher-level functionality
-and abstractions, iii) to provide the means for developing
-broad range of distributed applications such as gateways,
-workflows, application management systems, and runtime
-environments. Interestingly, SAGA provides an integrated,
-lightweight approach to support scripting for building distributed applications. The SAGA
-API has been used to provide almost complete coverage over nearly all grid
-and distributed computing middleware/systems, including
-but not limited to Condor, Genesis, Globus, UNICORE, SGE,
-LSF/PBS/Torque, and Amazon EC2.
+SAGA and BigJob are lightweight that they can be easily installed into
+the home directory of a user using the Python Package Index
+(PyPi). SAGA is packaged within BigJob, so users do not have to worry
+about installing two seperate modules.
 
-% Andre M to give more of a section for SAGA
+Since the main deployment is on XSEDE, we do not recommend altering
+the default PYTHONPATH of the machines. Instead, we encourage users to
+use a virtual environment. A virtual environment allows a user to
+create a local Python software repository in his or her home directory
+that behaves exactly like the global Python repository, except that it
+grants the user \textit{write} access to it. In order to use virtual
+environment, the Python version must be greater than 2.4. Since some
+XSEDE machines use Python 2.4 as the default python version, it may be
+required to load a python module file before installing BigJob.
 
-\subsubsection{Deployment into User Space}
-
-SAGA and BigJob are lightweight that they can be easily installed into 
-the home directory of a user using the Python Package Index (PyPi). SAGA is 
-packaged within BigJob, so users do not have to worry about installing two
-seperate modules. 
-
-Since the main deployment is on XSEDE, we do not recommend
-altering the default PYTHONPATH of the machines. Instead, we encourage users to
-use a virtual environment. A virtual environment allows a user to create a local
-Python software repository in his or her home directory that behaves exactly like the 
-global Python repository, except that it grants the user \textit{write} access to it. In 
-order to use virtual environment, the Python version must be greater than 2.4. Since 
-some XSEDE machines use Python 2.4 as the default python version, it may be required
-to load a python module file before installing BigJob.
-
-After activating the virtual environment, the BigJob python package can be installed
-by typing: 
+After activating the virtual environment, the BigJob python package
+can be installed by typing:
 
 \begin{lstlisting}[frame=single]
 easy_install bigjob
 \end{lstlisting}
 
 In addition to the BigJob package, it installs BigJob python
-dependencies, including the SAGA package. The SAGA package includes the proper
-adaptors for a wide variety of middleware systems. This allows
-the user to submit jobs to almost any of the XSEDE batch queuing systems.
+dependencies, including the SAGA package. The SAGA package includes
+the proper adaptors for a wide variety of middleware systems. This
+allows the user to submit jobs to almost any of the XSEDE batch
+queuing systems.
 
-BigJob requires SSH password-less login to the machines and a redis server running either locally or on a remote server. The redis server is used for coordination
-of the pilot-job and its compute and data units. For the purposes of this project, we utilize a private redis server hosted on a virtual machine at Indiana University. In order to provide a more seemless uptake of BigJob by users, we will provide an open-acess redis server available on XSEDE. This avoids the overhead of new users having to start a redis-server on an XSEDE machine's head node or on their local machines. This effort is currently underway with XSEDE ECSS staff to make the server only accessible to registered users of XSEDE.
+BigJob requires SSH password-less login to the machines and a redis
+server running either locally or on a remote server. The redis server
+is used for coordination of the pilot-job and its compute and data
+units. For the purposes of this project, we utilize a private redis
+server hosted on a virtual machine at Indiana University. In order to
+provide a more seemless uptake of BigJob by users, we will provide an
+open-acess redis server available on XSEDE. This avoids the overhead
+of new users having to start a redis-server on an XSEDE machine's head
+node or on their local machines. This effort is currently underway
+with XSEDE ECSS staff to make the server only accessible to registered
+users of XSEDE.
 
-After following the aforementioned steps, users will be able to write their own BigJob submission scripts using Python. These scripts can range from simple ensembled-based simulations to more complicated workflows based on the users' needs.
+After following the aforementioned steps, users will be able to write
+their own BigJob submission scripts using Python. These scripts can
+range from simple ensembled-based simulations to more complicated
+workflows based on the users' needs.
 
 \subsection{Async Replica-Exchange}
 \mrnote{CompSci + Chemists}
