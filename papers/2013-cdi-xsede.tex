@@ -79,7 +79,7 @@
   (b) $T_c$ as a function of the number of replicas, and (iii) a
   description of the software infrastructure that is employed to
   enable distributed replica-exchange on XSEDE.
-
+  \jhanote{SJ}
 \end{abstract}
 
 \category{H.4}{Information Systems Applications}{Miscellaneous}
@@ -92,7 +92,7 @@
   resources}
 
 \section{Introduction}
-\jhanote{SJ's section}
+\jhanote{SJ + Emilio Section}
 
 \jhanote{Describe the need for large-scale simulations. Describe what
   is unique to replica-exchange. Challenges that arise from loose,
@@ -110,16 +110,17 @@
  
 \jhanote{Aim of this work is to present (i) the framework -- both
   components, (ii) understand and characterize basic performance}
+
   
 \section{Scientific Problem}\label{sec:requirements}
 
 \jhanote{RE represents the core coordination/communication pattern for
   a class of problems}
-\mrnote{Chemists}
+
 
 \subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
 
-\subsection{Computational Requirements}
+%\subsection{Computational Requirements}
 
 \section{Software Environment}
 
@@ -220,7 +221,7 @@ coverage over nearly all grid and distributed computing
 middleware/systems, including but not limited to Condor, Genesis,
 Globus, UNICORE, SGE, LSF/PBS/Torque, and Amazon EC2.
 
-\subsection{Deployment of BigJob into User Space}
+\subsection{Using BigJob on XSEDE}
 
 SAGA and BigJob are lightweight that they can be easily installed into
 the home directory of a user using the Python Package Index
@@ -270,10 +271,14 @@ workflows based on the users' needs.
 \subsection{Async Replica-Exchange}
 \mrnote{CompSci + Chemists}
 
-\section{Characterizing Replica Exchange on XSEDE }\label{sec:results}
+\section{Large-Scale Replica Exchange on XSEDE: Experiments and
+  Results}\label{sec:results}
 \mrnote{ CompSci's Section}
 
 \subsection{Performance Model}
+
+\jhanote{Introduce coordination and execution times, as a function of
+  num. of replicas}
 
 \jhanote{Ole}
 
@@ -285,9 +290,12 @@ time waiting in queue.  (iv) each exchange takes place approximately
 1ps (v) each replica runs for 1ns
 
 
-\subsection{Computational Configuration}
+\subsection{Experimental Configuration}
 (i) Fixed num. of cores [Fixed Pilots, varying resources] (ii) ``Flood"
 XSEDE -- minimize the Time to Wait
+
+\subsection{Results}
+
 
 \section{Discussion}
 
