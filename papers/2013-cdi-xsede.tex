@@ -18,7 +18,7 @@
 \newcommand{\tbnote}[1]{ {\textcolor{magenta} { ***TcB: #1 }}}
 \newcommand{\jhanote}[1]{ {\textcolor{red} { ***SJ: #1 }}}
 \newcommand{\mrnote}[1]{ {\textcolor{blue} { ***Melissa: #1 }}}
-\newcommand{\abhi}[1]{ {\textcolor{green} { ***Abhinav: #1 }}}
+\newcommand{\egnote}[1]{ {\textcolor{green} { ***Emilio: #1 }}}
 \newcommand{\hfnote}[1]{ {\textcolor{cyan} { ***HF: #1 }}}
 \newcommand{\rajib}[1]{ {\textcolor{blue} { ***RM: #1 }}}
 \else
@@ -98,6 +98,72 @@
   is unique to replica-exchange. Challenges that arise from loose,
   intermittent (stochastic) coupling, as opposed to fixed exchanges}
 
+Parallel Replica Exchange (RE) denotes a family of advanced
+conformational sampling algorithms widely employed in molecular
+simulations of chemical and biological systems. The key aspect of RE
+algorithms is that multiple molecular dynamics (MD) threads (referred
+to as “replicas”) each assigned to a different thermodynamic or
+potential energy state of the system, are executed in parallel and, further,
+replicas travel in configurational space as well as in state
+space by communicating and stochastically exchanging their state
+assignments with those of other replicas. Exchanges are controlled by
+microscopic reversibility requirements ensuring that feasible
+thermodynamic ensembles are sampled at each state.  It has been shown
+in many contexts \egnote{[references]} that RE moves enhance
+conformational mixing relative to multiplexed serial conformational
+sampling algorithms based on teams of non-communicating
+MD threads. Replica exchange algorithms indeed provide some of the
+most powerful conformational sampling tools available, yielding
+converged results orders of magnitude faster than
+conventional approaches.
+
+The advantages of RE approaches are however partly counterbalanced by
+the additional complexities inherent in instating and maintaining a
+communication framework among the MD threads. In practice this
+requirement has historically discouraged large scale deployment of RE
+on XSEDE. In our view this is not necessarily due to lack of suitable
+hardware and networking resources, but rather to the lack of suitable
+software technologies capable of efficiently harnessing this latent
+computational power.
+
+Many applications areas, such as the ones illustrated in this report,
+benefit greatly from multi-dimensional RE implementations employing
+hundreds to thousands of replicas. However, current implementations
+of the replica exchange method in use by the computational chemistry
+community are severely limited in terms of it scalability and control
+when many replicas are involved. In conventional implementations of
+RE, simulations progress in unison and exchanges occur in a
+synchronous manner whereby all replicas must reach a pre-determined
+state (typically the completion of a certain number of MD steps),
+before exchanges are performed. This synchronous approach has a number
+of severe limitations. Firstly, sufficient dedicated computational
+resources must be secured for all of the replicas before the
+simulation can begin execution. Secondly, the computational resources
+must be statically maintained until the simulation is
+completed. Thirdly, failure of any replica simulation typically causes
+the whole calculation to abort. The reliance on a static pool of
+computational resources and zero fault tolerance prevents the
+synchronous RE approach from being a feasible solution for large scale
+RE deployments.
+
+As earlier prototypical implementations of asynchronous RE (aRE)
+algorithms \egnote{[Gallicchio 2008]} have illustrated, the replica
+exchange method itself does not impose the restriction that exchanges
+should occur synchronously across all threads and that all of the MD
+threads should run at the same time. The basic idea of asynchronous
+RE is to allow pairs of replicas to perform exchanges independently
+from the other replicas. This paradigm lends itself naturally to
+implementations based on the pilot-job framework described below,
+which, while already extensively employed to automate the asynchronous
+execution of independent ensembles, as shown in this work, can be
+effectively employed to manage inter-communicating MD threads.
+
+In this work we present ASyncRE, an asynchronous RE software utility
+deployed built on the BigJob/SAGA distributed computing environment on
+XSEDE capable of scaling to arbitrarily large numbers of
+replicas. Illustrative applications of the software to large-scale
+multi-dimensional RE problems are presented and analyzed ...
+
 \jhanote{(i) algorithmic advances coupled with infrastructural
   advances. (ii) the need for dynamic execution and resource
   management, (iii) which is why we believe pilot-jobs is a good
@@ -116,6 +182,8 @@
 
 \jhanote{RE represents the core coordination/communication pattern for
   a class of problems}
+
+RE 
 
 
 \subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
