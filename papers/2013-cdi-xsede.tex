@@ -177,7 +177,7 @@ multi-dimensional RE problems are presented and analyzed ...
 \jhanote{Aim of this work is to present (i) the framework -- both
   components, (ii) understand and characterize basic performance}
 
-  
+
 \section{Scientific Problem}\label{sec:requirements}
 
 \jhanote{RE represents the core coordination/communication pattern for
@@ -192,8 +192,8 @@ p(x;\beta,\theta) = \frac{\exp[-U(x;\beta,\theta)]}{Z} \, ,
 where $x$ represents the configuration of the system (atomic
 coordinates), $Z$ denotes the configurational partition function,
 $\beta=1/k_B T$ is the inverse temperature, and
-$U(x;\beta,\theta)=\beta V(x;\theta)$ is the ``reduced'' potential
-energy of the system which depends linearly on the set temperature
+$U(x;\beta,\theta)=\beta V(x;\theta)$ is the dimensionless potential
+energy of the system which depends linearly on the set inverse temperature
 (generally also on the applied pressure and the chemical potentials of
 the components for the isobaric and grand-canonical ensembles,
 respectively) and on potential energy parameters (such as partial
@@ -205,7 +205,7 @@ evolves in time while the parameters of the model ($\beta$ and
 $\theta$) are kept fixed. Slow convergence is the main issue of
 concern of methods of this kind as it is notoriously difficult to
 achieve equilibration within the time scale afforded by even the
-fastest supercomputers. Great progress has been achived in recent
+fastest supercomputers. Great progress has been achieved in recent
 years with the development of generalized ensemble formulations which
 provide a random walk not only in conformational space,
 but also in parameter space.  Enhanced conformational sampling
@@ -217,7 +217,7 @@ Amongst generalized ensemble conformational sampling algorithms,
 replica exchange (RE) algorithms (introduced above) are some of the
 most effective and, in addition, particularly suitable for deployment
 on parallel computing architectures. RE is based on teams of MD
-threads each travelling in state space by exchanging state parameters
+threads each traveling in state space by exchanging state parameters
 ($\beta_i$,$\theta_i$) among each other.  The most widely employed RE
 scheme is temperature RE (T-RE) in which inverse temperatures
 $\beta_i$ are exchanged. T-RE accelerates interconversions between
@@ -225,7 +225,7 @@ stable states of the system by letting replicas temporarily visit high
 temperatures where barrier crossings are facilitated. However, RE
 schemes can involve exchanges of any number of state parameters. RE schemes involving the exchange of more than one parameters are often referred to as \emph{multi-dimensional} RE schemes.
 
-Any RE scheme are required to satisfy microscopic reversibility. In the present context this is ensured RE exchanges are structured so that
+Any RE scheme is required to satisfy microscopic reversibility. In the present context this is ensured by structuring RE exchanges so that
 permutations of state parameters assignments to replicas are
 distributed according to the discrete unnormalized probability
 distribution:
@@ -234,9 +234,19 @@ p(\{j_M\})=\exp\left[-\sum_{i=1}^M U(x_i;\beta_{j_i};\theta_{j_i}\right] \,
 \end{equation}
 where $\{j_M\}$ denotes one of the $M!$ permutations of an index vector of length $M$,  $x_i$ is the atomic configuration of replica $i$, and $\beta_{j_i}$ and $\theta_{j_i}$ are the inverse temperature and potential parameters sets assigned to replica $i$.
 
-In this work we discuss four science application areas that benefit from the application of ...
+In this work we analyze four science application areas that benefit from the application of multi-dimensional RE protocols. The first is the modeling of binding between a guest molecule (cyclooctanol) and a host ($\beta$-cyclodextrin) to form a supramolecular complex in solution (Fig.\ \ref{}). In this case the dimensionless energy is:
+\begin{equation}
+U(x;\beta,\lambda) = \beta V_0(x) + \beta \lambda u(x) \,
+\end{equation}
+where $V_0(x)$ is the potential energy when the host and the guest are separated, $u(x)$ is the interaction energy between the host and the guest, and $\lambda$ is an alchemical parameter ranging between 0 and 1. This systems is modeled by multi-dimensional RE with up to 192 \egnote{modify as needed} replicas corresponding to all possible combinations of 8 temperatures distributed between 300 and 600K and 24 $\lambda$'s ranging between 0 and 1. The purpose of the sampling along $\lambda$ is to enhance mixing of conformations along the alchemical pathway while high temperatures enhance sampling at each alchemical stage.
 
+The second application studied by multi-dimensional RE is the folding of the TrpCage mini-protein. In this case the dimensionless potential energy function is
+\begin{equation}
+U(x;\beta,\lambda) = \beta V(x) + \beta w_{\rm Go} V_{\rm Go}(x) \,
+\end{equation}
+where $V(x)$ is the unbiased potential energy, $V_{\rm Go}$ is a biasing potential favoring the formation of natively folded conformations, and $w_{\rm Go}$ is an energy weight ranging between 0 (no bias) to $0.42$ in this case (maximal bias). This system is studied with up to 336 \egnote{modify as needed} replicas corresponding to all possible combinations of 24 temperatures between 300 and 600K and 14 values of  $w_{\rm Go}$ between 0 and $0.42$. The purpose of this protocol is to bias the system so as to enhance the rate of folding and unfolding at multiple temperatures.
 
+... umbrella sampling ...
 
 
 \subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
