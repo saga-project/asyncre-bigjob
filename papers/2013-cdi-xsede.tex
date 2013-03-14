@@ -331,11 +331,78 @@ users of XSEDE.
 
 After following the aforementioned steps, users will be able to write
 their own BigJob submission scripts using Python. These scripts can
-range from simple ensembled-based simulations to more complicated
+range from simple ensemble-based simulations to more complicated
 workflows based on the users' needs.
 
 \subsection{Async Replica-Exchange}
-\mrnote{CompSci + Chemists}
+\mrnote{CompSci + PhysSci}
+
+ASyncRE is a Python package to perform file-based asynchronous
+parallel replica exchange molecular simulations. The current
+implementation is aimed at computer clusters managed by a queuing
+system and supported by a shared filesystem. The BigJob distributed
+computing infrastructure is used for job launching and monitoring.
+
+The ASyncRE package includes a core module which performs common tasks
+such as job staging through BigJob and exchanging of parameters among
+replicas. Support for arbitrary MD engines and RE schemes are
+introduced through user-provided modules (Figure \ref{fig:aRE_chart}). Currently, MD
+engine modules are available for the AMBER and IMPACT MD programs. A
+similar modular mechanism provides support for arbitrary RE schemes
+(temperature, Hamiltonian, etc.), including arbitrary multidimensional
+combinations of these (such as 2D RE temperature/Hamiltonian). The
+software is currently distributed with modules for multidimensional RE
+umbrella sampling with AMBER \egnote{[AMBER US references]}, and BEDAM $\lambda$-RE alchemical binding
+free energy calculations with the IMPACT MD engine \egnote{[BEDAM papers]}.
+
+\begin{figure}
+\includegraphics[width=3in]{asyncre.eps}
+\caption{\label{fig:aRE_chart}The structure of the ASyncRE
+  library. The ASyncRE Core module implements all of the
+  general-purpose facilities to start and monitor replicas via BigJob,
+  and coordinates replica exchanges. Routines implemented in adaptor
+  modules perform functions specific to particular combinations of MD
+  engines and RE schemes such as AMBER+umbrella sampling or IMPACT+BEDAM.  }
+\end{figure}
+
+
+The algorithm implemented by ASyncRE can be summarized as follows:
+
+\begin{enumerate}
+
+\item Job files and executables for the replicas are set up as
+  appropriate for the MD engine/RE scheme combination as specified by
+  a user-provided module. Typically this is accomplished by parsing a
+  set of template input files according to the thermodynamic and
+  potential energy settings which distinguish one replica from
+  another. Each replica lives in a separate sub-directory of the
+  working directory. These replica sub-directories are named
+  \verb+r0+, {\tt r1}, $\ldots$,\verb+r<M-1>+, where \verb+M+ is the
+  number of replicas.
+
+\item Periodically, a subset of the replicas are submitted to BigJob
+  for execution and enter a "R" (running) state. When a replica
+  completes a run (of length specified in the MD engine input file),
+  referred to in what follows as a "cycle", it enters a "W" (waiting)
+  state which makes it eligible for exchange of thermodynamic and
+  other parameters with other replicas and for the initiation of a new
+  run cycle.
+
+\item Periodically, exchanges of thermodynamic parameters are
+  performed between the replicas in the waiting state based on the
+  appropriate replica exchange rules (as specified in user modules)
+  based on their thermodynamic states (temperature for example), or
+  potential energy settings, together with the necessary structural
+  and energetic information obtained from the MD engine output files.
+
+\end{enumerate}
+
+Internally a dictionary named \verb+status+ is used to keep track of
+the status of the replicas (the current cycle, thermodynamic state,
+running status, etc.).
+
+...
+
 
 \section{Large-Scale Replica Exchange on XSEDE: Experiments and
   Results}\label{sec:results}
