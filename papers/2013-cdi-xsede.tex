@@ -372,7 +372,7 @@ The algorithm implemented by ASyncRE can be summarized as follows:
 
 \item Job files and executables for the replicas are set up as
   appropriate for the MD engine/RE scheme combination as specified by
-  a user-provided module. Typically this is accomplished by parsing a
+  the user-provided module/script. Typically this is accomplished by parsing a
   set of template input files according to the thermodynamic and
   potential energy settings which distinguish one replica from
   another. Each replica lives in a separate sub-directory of the
@@ -380,13 +380,13 @@ The algorithm implemented by ASyncRE can be summarized as follows:
   \verb+r0+, {\tt r1}, $\ldots$,\verb+r<M-1>+, where \verb+M+ is the
   number of replicas.
 
-\item Periodically, a subset of the replicas are submitted to BigJob
-  for execution and enter a "R" (running) state. When a replica
-  completes a run (of length specified in the MD engine input file),
-  referred to in what follows as a "cycle", it enters a "W" (waiting)
-  state which makes it eligible for exchange of thermodynamic and
-  other parameters with other replicas and for the initiation of a new
-  run cycle.
+\item Periodically, a randomly chosen subset of the replicas are
+  submitted to BigJob for execution and enter a "R" (running)
+  state. When a replica completes a run (of length specified in the MD
+  engine input file), referred to in what follows as a "cycle", it
+  enters a "W" (waiting) state which makes it eligible for exchange of
+  thermodynamic and other parameters with other replicas and for the
+  initiation of a new run cycle.
 
 \item Periodically, exchanges of thermodynamic parameters are
   performed between the replicas in the waiting state based on the
@@ -399,9 +399,90 @@ The algorithm implemented by ASyncRE can be summarized as follows:
 
 Internally a dictionary named \verb+status+ is used to keep track of
 the status of the replicas (the current cycle, thermodynamic state,
-running status, etc.).
+running status, etc.). The status of the application is check-pointed periodically using pickle. When restarting a previously stopped job, the 'status' data structure is restored from this file and the calculation proceeds from where it was left off. 
 
-...
+\subsubsection{AsyncRE Installation}
+
+Following the installation of BigJob (see above) in the virtual user Python environment, ASyncRE is installed using PyPi as follows:
+
+\begin{lstlisting}[frame=single]
+pip install numpy
+pip install configobj
+pip install async_re-0.1.0.tar.gz
+\end{lstlisting}
+
+\verb+numpy+ and \verb+configobj+ are currently required dependencies that will be installed automatically after the ASyncRE software will be integrated into the PyPi archive. \verb+async_re-0.1.0.tar.gz+ is the current Python distribution package for ASyncRE. The library will be soon made available publicly through \verb+github+. In addition to installing the package in the virtual environment, it is convenient to maintain a copy of the ASyncRE modules, scripts, and examples in an easy-to-access location, such as:
+
+\begin{lstlisting}[frame=single]
+cd ~/src
+tar zxvf async_re-0.1.0.tar.gz
+\end{lstlisting}
+
+Current application-level class files (such as \verb+amberus_async_re.py+ behave as executable scripts when launched directly (see below). Documentation files can be found in the \verb+doc+ subdirectory and sample files in the \verb+examples+ subdirectory of the package directory. 
+
+\subsubsection{ASyncRE Execution}
+
+A typical sequence of commands to initiate an ASyncRE run on XSEDE is as follows:
+
+\begin{lstlisting}[frame=single]
+ssh <cluster_head_node>
+source ~/.bigjob/bin/activate
+cd <working_directory>
+python amber_us.py control_file.cntl\
+ > LOG 2>& &
+\end{lstlisting}
+
+The second command above activates the virtualenv Python environment (see above). \verb+amber_us.py+ is a simple user-provided python script that loads the appropriate modules and launches the asynchronous RE simulation. For example for AMBER/umbrella sampling it is:
+
+\begin{lstlisting}[frame=single]
+import sys
+from amberus_async_re \
+ import amberus_async_re_job
+# Parse control file
+usage = "%prog <ConfigFile>"
+if len(sys.argv) != 2:
+    print "Please specify ONE input file"
+    sys.exit(1)    
+commandFile = sys.argv[1]
+# initializes asynchronus RE simulation
+rx = amberus_async_re_job\
+ (commandFile, options=None)
+rx.setupJob()
+# starts submitting replicas to BigJob
+rx.scheduleJobs()
+\end{lstlisting}
+
+The ASyncRE package is users-extensible. Users are free to implement RE modalities not natively supported by the current ASyncRE package (see details on "Writing extension modules" in the ASyncRE documentation). Scripts that implement user-provided RE schemes are typically preceded by customized classes/methods (usually overrides of default ones). An example of a custom script application is (see ASyncRE documentation for details):
+
+\begin{lstlisting}[frame=single]
+import sys, math, os, ...
+from amber_async_re import pj_amber_job
+
+class myREscheme_async_re_job(pj_amber_job):
+    def _checkInput(self):
+       ...
+    def _buildInpFile(self, replica):
+       ...
+    def ...
+    ...
+
+if __name__ == '__main__':
+   # Parse control file
+   usage = "%prog <ConfigFile>"
+   if len(sys.argv) != 2:
+      print "Please specify ONE input file"
+      sys.exit(1)    
+   commandFile = sys.argv[1]
+   # initializes asynchronus RE simulation
+   rx = myREscheme_async_re_job\
+(commandFile, options=None)
+   rx.setupJob()
+   # starts submitting replicas to BigJob
+   rx.scheduleJobs()
+\end{lstlisting}
+
+
+
 
 
 \section{Large-Scale Replica Exchange on XSEDE: Experiments and
