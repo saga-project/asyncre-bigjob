@@ -18,10 +18,10 @@
 #                    $grep "Replica:" <BigJobLog> | awk '{...extract data on $8-$5...}'
 #
 # SUBJOB_CORES Nreps_running <steps per cycle> <completed cycles> <avg/std cycle time (s) (Amber)> <avg/std cycle time (s) (BigJob)>
-# 6 120  5500 
+ 6 120  5500 1213 41.6 0.51 63.7 14.1
 12  60  7000  960 29.3 0.51 47.1 12.3
 24  30 10250  705 29.4 0.35 47.2 13.9     
-#48  15 12500                         
+48  15 12500  500 29.6 0.40 47.4 14.3                       
 #
 # Derived quantities:
 # simulation time (ns) = <completed cycles>*<steps per cycle>*<sim. time per MD step>*WALL_TIME
