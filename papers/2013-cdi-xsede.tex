@@ -10,7 +10,7 @@
 \usepackage[usenames,dvipsnames]{xcolor} % more text colors!
 
 \usepackage[font=footnotesize]{subfig}
-%\DeclareCaptionType{copyrightbox}
+\DeclareCaptionType{copyrightbox}
 \hyphenation{op-tical net-works semi-conduc-tor}
 
 \newif\ifdraft
@@ -101,8 +101,6 @@ Shantenu Jha \\
 \maketitle
 
 \begin{abstract}
-<<<<<<< HEAD
-  
   Replica-Exchange represent a powerful class of algorithms that are
   used for enhanced configurational and energetic sampling in a range
   of physical systems. Computationally they represent a type of
@@ -131,32 +129,43 @@ Shantenu Jha \\
   cyberinfrastructure such as XSEDE, as well as support novel usage
   modes on these infrastructure. This paper also represents the
   release of the framework to the broader biophysical simulation
-  community and provides details on its usage.}
-
-  that it can support different
-  
-  
-=======
-
-  A description of the computational workflow, viz., the different
-  machines/resources used, how many ensembles we simulated, data
-  volumnes managed etc., (ii) any computational performance issues
-  including (a) measuring "efficiency" as the number of distributed
-  resources utilized goes as measured by $T_c$ (time to completion),
-  (b) $T_c$ as a function of the number of replicas, and (iii) a
-  description of the software infrastructure that is employed to
-  enable distributed replica-exchange on XSEDE.
-  \jhanote{SJ}
-  \brnote{Some ideas via Darrin's comments:}
-  The infrastructure described herein is immediately applicable to several
-  important problems, including, but not limited to, probing the chemical
-  mechanisms of enzymes via quantum mechanical/molecular mechanical 
-  simulations. While such an approach has long been considered as ideal, it has
-  not widely been used due to difficulties in its efficient implementation. The
-  work here presents the immediate possibility of its routine application
-  across multiple software and hardware architectures.
->>>>>>> c2738e4ff07cd26f2617d88bd3fcd71eeefe7128
+  community and provides details on its usage.
 \end{abstract}
+
+
+
+
+
+\category{H.4}{Information Systems Applications}{Miscellaneous}
+%A category including the fourth, optional field follows...
+\category{D.2.8}{Software Engineering}{Metrics}[complexity measures, performance measures]
+
+\terms{Experience, Technology}
+
+\keywords{HPC, Distributed Computing, IMPACT, AMBER, MD, Large Scale, XSEDE
+  resources}
+
+\section{Introduction}
+
+\jhanote{ A description of the computational workflow, viz., the
+  different machines/resources used, how many ensembles we
+  simulated, data volumnes managed etc., (ii) any computational
+  performance issues including (a) measuring "efficiency" as the
+  number of distributed resources utilized goes as measured by $T_c$
+  (time to completion), (b) $T_c$ as a function of the number of
+  replicas, and (iii) a description of the software infrastructure
+  that is employed to enable distributed replica-exchange on XSEDE.}
+
+\brnote{Some ideas via Darrin's comments: The infrastructure
+  described herein is immediately applicable to several important
+  problems, including, but not limited to, probing the chemical
+  mechanisms of enzymes via quantum mechanical/molecular mechanical 
+  simulations. While such an approach has long been considered as
+  ideal, it has not widely been used due to difficulties in its
+  efficient implementation. The work here presents the immediate
+  possibility of its routine application across multiple software
+  and hardware architectures.}
+
 
 \jhanote{A description of the computational workflow, viz., the
   different machines/resources used, how many ensembles we simulated,
@@ -185,20 +194,6 @@ Shantenu Jha \\
 \jhanote{Aim of this work is to present (i) the framework -- both
   components, (ii) understand and characterize basic performance}
 
-
-
-
-\category{H.4}{Information Systems Applications}{Miscellaneous}
-%A category including the fourth, optional field follows...
-\category{D.2.8}{Software Engineering}{Metrics}[complexity measures, performance measures]
-
-\terms{Experience, Technology}
-
-\keywords{HPC, Distributed Computing, IMPACT, AMBER, MD, Large Scale, XSEDE
-  resources}
-
-\section{Introduction}
-\jhanote{SJ + Emilio Section}
 
 Although the coupling between replicas is conceptually simple and
 relatively ``easy'', replica-exchange applications represent the
