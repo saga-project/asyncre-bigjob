@@ -1,9 +1,10 @@
 set terminal postscript eps enhanced color lw 3 16
-set size 0.65,0.65
+set output "qmmm.eps"
+set size 0.70,0.70
 
 set key left
 f(x) = a*x + b
-set format y %4.2f
+set format y "%4.2f"
 
 ppn = 12
 ns_per_cycle = 0.001 # each cycle 
@@ -40,5 +41,4 @@ plot 'qmmm.dat' u 1:($2*ns_per_cycle*24) ti "", f(x) ti sprintf("y = %.2fx+%.2f"
 # fit f(x) 'qmmm.dat' u ($1/ppn):($2*ns_per_cycle) via a,b
 # plot 'qmmm.dat' u ($1/ppn):($2*ns_per_cycle) ti ""
 
-set output "qmmm.eps"
 replot
