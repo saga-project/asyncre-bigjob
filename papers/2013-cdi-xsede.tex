@@ -6,10 +6,11 @@
 \usepackage{graphicx}
 \usepackage{xspace}
 \usepackage{listings}
-
+\usepackage{enumerate} % easiest way to do roman numeral lists
+\usepackage[usenames,dvipsnames]{xcolor} % more text colors!
 
 \usepackage[font=footnotesize]{subfig}
-\DeclareCaptionType{copyrightbox}
+%\DeclareCaptionType{copyrightbox}
 \hyphenation{op-tical net-works semi-conduc-tor}
 
 \newif\ifdraft
@@ -21,6 +22,7 @@
 \newcommand{\egnote}[1]{ {\textcolor{green} { ***Emilio: #1 }}}
 \newcommand{\hfnote}[1]{ {\textcolor{cyan} { ***HF: #1 }}}
 \newcommand{\rajib}[1]{ {\textcolor{blue} { ***RM: #1 }}}
+\newcommand{\brnote}[1]{ {\textcolor{Orange} { ***Brian: #1 }}}
 \else
 \newcommand{\rajib}[1]{}
 \newcommand{\jhanote}[1]{}
@@ -29,6 +31,7 @@
 \newcommand{\abhi}[1]{ {}}
 \newcommand{\hfnote}[1]{}
 \newcommand{\tbnote}[1]{ {}}
+\newcommand{\brnote}[1]{ {}}
 \fi
 
 \newcommand{\pilotjob}{Pilot-Job\xspace}
@@ -66,8 +69,9 @@ Emilio Gallichio\\
 \and  % use '\and' if you need 'another row' of author names
 % 3rd. author
 \alignauthor 
-Taisung Lee \\
-       \affaddr{BioMaPS Institute for Quantitative Biology and Department of Chemistry and Chemical Biology, Rutgers University}\\
+{Tai-Sung} Lee \\
+       \affaddr{BioMaPS Institute for Quantitative Biology and Department of 
+         Chemistry and Chemical Biology, Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
       \email{taisung@biomaps.rutgers.edu}
 \alignauthor
@@ -76,9 +80,9 @@ Ole Weidner \\
        \affaddr{Piscataway, NJ 08854}\\
       \email{xxx}
 \alignauthor 
-Darrin York \\
-       \affaddr{BioMaPS Institute for Quantitative Biology and Department of Chemistry and Chemical Biology, Rutgers University}\\
-       \affaddr{Rutgers University}\\
+Darrin M. York \\
+       \affaddr{BioMaPS Institute for Quantitative Biology and Department of 
+          Chemistry and Chemical Biology, Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
       \email{york@biomaps.rutgers.edu}
 \and
@@ -97,6 +101,7 @@ Shantenu Jha \\
 \maketitle
 
 \begin{abstract}
+<<<<<<< HEAD
   
   Replica-Exchange represent a powerful class of algorithms that are
   used for enhanced configurational and energetic sampling in a range
@@ -131,6 +136,26 @@ Shantenu Jha \\
   that it can support different
   
   
+=======
+
+  A description of the computational workflow, viz., the different
+  machines/resources used, how many ensembles we simulated, data
+  volumnes managed etc., (ii) any computational performance issues
+  including (a) measuring "efficiency" as the number of distributed
+  resources utilized goes as measured by $T_c$ (time to completion),
+  (b) $T_c$ as a function of the number of replicas, and (iii) a
+  description of the software infrastructure that is employed to
+  enable distributed replica-exchange on XSEDE.
+  \jhanote{SJ}
+  \brnote{Some ideas via Darrin's comments:}
+  The infrastructure described herein is immediately applicable to several
+  important problems, including, but not limited to, probing the chemical
+  mechanisms of enzymes via quantum mechanical/molecular mechanical 
+  simulations. While such an approach has long been considered as ideal, it has
+  not widely been used due to difficulties in its efficient implementation. The
+  work here presents the immediate possibility of its routine application
+  across multiple software and hardware architectures.
+>>>>>>> c2738e4ff07cd26f2617d88bd3fcd71eeefe7128
 \end{abstract}
 
 \jhanote{A description of the computational workflow, viz., the
@@ -274,102 +299,122 @@ multi-dimensional RE problems are presented and analyzed ...
 \jhanote{RE represents the core coordination/communication pattern for
   a class of problems} 
 
-The conformational sampling problem in molecular simulations can be
-described as the problem of efficiently drawing samples $x$ from the
-canonical distribution of the chemical system:
+The conformational sampling problem in molecular simulations can be described 
+as the problem of efficiently drawing samples $x$ from the canonical 
+distribution of the chemical system:
 \begin{equation}
 p(x;\beta,\theta) = \frac{\exp[-U(x;\beta,\theta)]}{Z} \, ,
 \end{equation}
-where $x$ represents the configuration of the system (atomic
-coordinates), $Z$ denotes the configurational partition function,
-$\beta=1/k_B T$ is the inverse temperature, and
-$U(x;\beta,\theta)=\beta V(x;\theta)$ is the dimensionless potential
-energy of the system which depends linearly on the set inverse temperature
-(generally also on the applied pressure and the chemical potentials of
-the components for the isobaric and grand-canonical ensembles,
-respectively) and on potential energy parameters (such as partial
-charges etc., as well as parameters of applied biasing potentials)
-collectively denotes as $\theta$.
+where $x$ represents the configuration of the system (atomic coordinates), $Z$ 
+denotes the configurational partition function, $\beta=1/k_B T$ is the inverse 
+(absolute) temperature, and $U(x;\beta,\theta)=\beta V(x;\theta)$ is the 
+dimensionless potential energy of the system.  $U(x;\beta,\theta)$ depends 
+linearly on the inverse temperature and on the potential energy parameters 
+({\em e.g.} the atomic charges or parameters of any biasing potentials), 
+collectively denoted as $\theta$ (more generally, $U(x;\beta,\theta)$ also 
+depends on the applied pressure or component chemical potentials when using 
+the isobaric or (semi-)grand canonical ensembles, respectively).
 
-In conventional MD-based conformational sampling implementations $x$
-evolves in time while the parameters of the model ($\beta$ and
-$\theta$) are kept fixed. Slow convergence is the main issue of
-concern of methods of this kind as it is notoriously difficult to
-achieve equilibration within the time scale afforded by even the
-fastest supercomputers. Great progress has been achieved in recent
-years with the development of generalized ensemble formulations which
-provide a random walk not only in conformational space,
-but also in parameter space.  Enhanced conformational sampling
-algorithms based on generalized ensembles have revolutionized the
-field allowing the modeling of complex biochemical processes with
-unprecedented fidelity.
+In conventional MD-based sampling implementations, $x$ evolves in time with 
+fixed model parameters. Slow convergence is the main issue of concern with 
+methods of this kind as it is notoriously difficult to achieve equilibration 
+within the time scale afforded by even the fastest supercomputers. Fortunately,
+great progress has been achieved in recent years with the development of 
+generalized ensemble formulations, which now allow modeling of complex 
+biochemical processes with unprecedented fidelity. This sampling enhancement is
+achieved via a random walk, not only in conformational space, but also in 
+parameter space.
 
-Amongst generalized ensemble conformational sampling algorithms, replica exchange (RE)
-algorithms (introduced above) are some of the most effective and, in addition,
-particularly suitable for deployment on parallel computing architectures. RE is based on
-teams of MD threads each traveling in state space by exchanging state parameters
-($\beta_i$,$\theta_i$) among each other.  The most widely employed RE scheme is
-temperature RE (T-RE) in which inverse temperatures $\beta_i$ are exchanged. T-RE
-accelerates interconversions between stable states of the system by letting replicas
-temporarily visit high temperatures where barrier crossings are facilitated. However, RE
-schemes can involve exchanges of any number of state parameters. RE schemes involving
-the exchange of more than one parameters are often referred to as
-\emph{multi-dimensional} RE schemes.
+Amongst generalized ensemble sampling algorithms, replica exchange molecular
+dynamics (REMD) remains one of the most convenient and effective due to its 
+broad applicability and amenability to nearly all parallel computing 
+architectures. The core concept of REMD is that multiple replicas traveling in
+conformational space are additionally enabled to move in parameter space by 
+exchanging state parameters amongst each other. The first and most widely 
+employed RE scheme is temperature REMD (T-REMD) in which inverse temperatures 
+$\beta_i$ are exchanged. T-REMD accelerates interconversions between stable 
+states of the system by letting replicas temporarily visit high temperatures 
+where barrier crossings are more rapid. However, REMD schemes can involve 
+exchanges of any number of state parameters. For example, schemes involving the
+exchange of more than one parameter are often referred to as 
+\emph{multi-dimensional} REMD schemes.
 
-Any RE scheme is required to satisfy microscopic reversibility. In the present context
-this is ensured by structuring RE exchanges so that permutations of state parameters
-assignments to replicas are distributed according to the discrete unnormalized
-probability distribution:
+Any REMD scheme is required to satisfy microscopic reversibility. In the 
+present context this is ensured by structuring exchanges so that permutations 
+of state parameters assigned to replicas are distributed according to the 
+discrete unnormalized probability distribution:
 \begin{equation}
-p(\{j_M\})=\exp\left[-\sum_{i=1}^M U(x_i;\beta_{j_i};\theta_{j_i}\right] \,
+p(\{j_M\})=\exp\left[-\sum_{i=1}^M U(x_i;\beta_{j_i};\theta_{j_i})\right] \,
 \end{equation}
-where $\{j_M\}$ denotes one of the $M!$ permutations of an index vector of length $M$,  $x_i$ is the atomic configuration of replica $i$, and $\beta_{j_i}$ and $\theta_{j_i}$ are the inverse temperature and potential parameters sets assigned to replica $i$.
+where $\{j_M\}$ denotes one of the $M!$ permutations of a vector of $M$ states,
+$x_i$ is the atomic configuration of replica $i$, and $\beta_{j_i}$ and 
+$\theta_{j_i}$ are the inverse temperature and potential parameters assigned to
+replica $i$.
 
-In this work we analyze four science application areas that benefit from the application of multi-dimensional RE protocols. The first is the modeling of binding between a guest molecule (cyclooctanol) and a host ($\beta$-cyclodextrin) to form a supramolecular complex in solution (Fig.\ \ref{}). In this case the dimensionless energy is:
+In this work we analyze four science application areas that benefit from the 
+application of multi-dimensional REMD protocols. The first is the modeling of 
+binding between a guest molecule (cyclooctanol) and a host 
+($\beta$-cyclodextrin) to form a supramolecular complex in solution 
+(Fig.\ \ref{}). In this case the dimensionless energy is:
 \begin{equation}
 U(x;\beta,\lambda) = \beta V_0(x) + \beta \lambda u(x) \,
 \end{equation}
-where $V_0(x)$ is the potential energy when the host and the guest are separated, $u(x)$ is the interaction energy between the host and the guest, and $\lambda$ is an alchemical parameter ranging between 0 and 1. This systems is modeled by multi-dimensional RE with up to 192 \egnote{modify as needed} replicas corresponding to all possible combinations of 8 temperatures distributed between 300 and 600K and 24 $\lambda$'s ranging between 0 and 1. The purpose of the sampling along $\lambda$ is to enhance mixing of conformations along the alchemical pathway while high temperatures enhance sampling at each alchemical stage.
+where $V_0(x)$ is the potential energy when the host and the guest are 
+separated, $u(x)$ is the interaction energy between the host and the guest, and
+$\lambda$ is an alchemical parameter ranging between 0 and 1. This systems is 
+modeled by multi-dimensional RE with up to 192 \egnote{modify as needed} 
+replicas corresponding to all possible combinations of 8 temperatures 
+distributed between 300 and 600K and 24 $\lambda$'s ranging between 0 and 1. 
+The purpose of the sampling along $\lambda$ is to enhance mixing of 
+conformations along the alchemical pathway while high temperatures enhance 
+sampling at each alchemical stage.
 
-The second application studied by multi-dimensional RE is the folding of the TrpCage mini-protein. In this case the dimensionless potential energy function is
+The second application studied by multi-dimensional RE is the folding of the 
+TrpCage mini-protein. In this case the dimensionless potential energy function 
+is
 \begin{equation}
 U(x;\beta,\lambda) = \beta V(x) + \beta w_{\rm Go} V_{\rm Go}(x) \,
 \end{equation}
-where $V(x)$ is the unbiased potential energy, $V_{\rm Go}$ is a biasing potential favoring the formation of natively folded conformations, and $w_{\rm Go}$ is an energy weight ranging between 0 (no bias) to $0.42$ in this case (maximal bias). This system is studied with up to 336 \egnote{modify as needed} replicas corresponding to all possible combinations of 24 temperatures between 300 and 600K and 14 values of  $w_{\rm Go}$ between 0 and $0.42$. The purpose of this protocol is to bias the system so as to enhance the rate of folding and unfolding at multiple temperatures.
+where $V(x)$ is the unbiased potential energy, $V_{\rm Go}$ is a biasing 
+potential favoring the formation of natively folded conformations, and 
+$w_{\rm Go}$ is an energy weight ranging between 0 (no bias) to $0.42$ in this 
+case (maximal bias). This system is studied with up to 336 \egnote{modify as 
+  needed} replicas corresponding to all possible combinations of 24 
+temperatures between 300 and 600K and 14 values of  $w_{\rm Go}$ between 0 and 
+$0.42$. The purpose of this protocol is to bias the system so as to enhance the
+rate of folding and unfolding at multiple temperatures.
 
-The last two applications employ multi-dimensional RE umbrella sampling (US), but in two
-quite different scenarios, thus demonstrating the broad applicability of the approach.
-In all multi-dimensional RE umbrella sampling simulations, the dimensionless potential
-energy can be written as
+The last two applications employ multi-dimensional replica exchange umbrella 
+sampling (RE-US), but in two quite different scenarios, thus demonstrating the 
+broad applicability of the approach.  In all RE-US simulations, the 
+dimensionless potential energy can be written as
 \begin{equation}
 U(x;\beta,\lambda) = \beta V_0(x) + \beta \sum_{n=1}^N W_n(x_n)
 \end{equation}
-where $V_0(x)$ is the unbiased potential and $W_n(x_n)$ is a bias potential applied to
-the $n$th bias coordinate in order to localize sampling to high energy regions of
-configuration space that might not otherwise be sampled. For convenience (as is
-typically done) we choose $W_n(x_n)$ to have a harmonic form.  
+where $V_0(x)$ is the unbiased potential and $W_n(x_n)$ is a bias potential 
+applied to the $n$th bias coordinate in order to localize sampling to high 
+energy regions of configuration space that might not otherwise be sampled. For 
+convenience (as is typical) we choose $W_n(x_n)$ to have a harmonic form. 
 
-In the first RE-US scheme, the well-known alanine dipeptide model for protein the
-backbone is examined, and conformational biases are applied to the $\psi$/$\phi$ torsion
-angles. The complete range of 360 degrees is divided into 15 degree intervals for both
-angles, resulting in 576 replicas. Although this is a common test case for enhanced
-sampling protocols
-% Uncomment these citations if desired (see MDreferences.bib)
-%%\cite{Chodera_JChemTheoryComput_2007_v3_p26,Chodera_JChemPhys_2011_v135_p194110}
-, we increase the demand here by treating the solvent bath explicitly. The second
-application is a phosphoryl transfer reaction in solution, a prototype reaction for
-multiple protein and ribonucleic acid enzymes. Biases are applied to the breaking and
-forming bonds. The chemically reactive solute is treated quantum mechanically, whereas
-the solute is treated by classical molecular mechanics. 
+In the first RE-US scheme, the well-known alanine dipeptide model for protein 
+the backbone is examined, and conformational biases are applied to the 
+$\phi$/$\psi$ torsion angles. The complete range of 360 degrees is divided into
+15 degree intervals for both angles, resulting in 576 replicas. Although this 
+is a common test case for enhanced sampling protocols, we increase the demand 
+here by treating the solvent bath explicitly. The second application is a 
+phosphoryl transfer reaction in solution, a prototype reaction for multiple 
+protein and ribonucleic acid enzymes. Biases are applied to the breaking and
+forming bonds. The chemically reactive solute is treated quantum mechanically, 
+whereas the solute is treated by classical molecular mechanics. 
 
-Due to numerous calculations needed in quantum calculations and the unfavorable scaling
-of these calculations (unlike classical force fields, quantum potentials cannot be
-described as pair-wise interactions), it is extremely difficult to sample over the
-conformational space to obtain sufficient and meaningful ensembles.  Hence the
-advantages of a RE approach are especially important in QM simulations, such as the
-example system present here.  The RE umbrella sampling is one of the most promising ways
-to increase the feasible application of quantum potentials via increased sampling
-efficiency.
+Due to numerous calculations needed in quantum calculations and the unfavorable
+scaling of these calculations (unlike classical force fields, quantum 
+potentials cannot be described as pair-wise interactions), it is extremely 
+difficult to sample over the conformational space to obtain sufficient and 
+meaningful ensembles.  Hence the advantages of a RE-US approach are especially 
+important in QM simulations, such as the example system presented here.  RE-US
+is one of the most promising ways to increase the feasible application of 
+quantum potentials via increased sampling efficiency.
 
 \subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
 
@@ -745,36 +790,50 @@ if __name__ == '__main__':
   Results}\label{sec:results}
 \mrnote{ CompSci's Section}
 
-\subsection{Performance Model}
-
-\jhanote{Introduce coordination and execution times, as a function of
-  num. of replicas}
-
-\jhanote{Ole}
-
 \subsection{Systems Investigated} 
 
-\jhanote{1 sentence desription of the phyiscal systems}
-
-Systems 1-4: 1 QM/MM AMBER, 1 classical AMBER, 2 Impact
+Four physical model systems were investigated, two each with the IMPACT and
+AMBER MD engines. These systems represent broad classes of problems of chemical
+interest, namely binding, ``large scale'' macromolecular folding, 
+``small scale'' conformational changes, and chemical ({\em i.e.} bond 
+breaking/forming) events. Briefly, the systems are as follows:\\
+IMPACT (implicit solvent)
+\begin{enumerate}
+\item Host/guest binding of cyclooctanol/$\beta$-cyclodextrin. The exchange
+  parameters are all permutations of the system temperatures and an
+  alchemical parameter coupling the host/guest interactions.
+\item Folding of the TrpCage mini-protein. The exchange parameters are all
+  permutations of the system temperature and the coupling weight of a 
+  Go-type biasing potential.
+\end{enumerate} 
+AMBER (explicit solvent)
+\begin{enumerate}
+\item Umbrella sampling of the backbone conformational space ({\i.e.} the 
+  $\phi$/$\psi$ torsions) of alanine dipeptide. The exchange parameters are all
+  permutations of harmonic biasing potentials on each torsion.
+\item Hybrid quantum mechanical/molecular mechanical umbrella sampling of
+  phosphoryl transfer in 2-hydroxy ethyl phosphate, a model reaction for base 
+  catalyzed RNA cleavage. The exchange parameters are all permutations of 
+  harmonic biasing potentials on the breaking and forming bonds.
+\end{enumerate}
 
 \subsection{Experimental Configuration}
-\jhanote{how experiments were performed} 
 
-Common to mode I and II: (i) We run each configuration for 1 hour.
-(ii) Fixed num. of cores [Fixed Pilots, varying resources]
-
-Mode I: (ii) $N_R$ vary from 4, 16, 32, 64, 128, 512 \jhanote{Emilio,
- Melissa to write}
+Multiple RE simulations were performed on each system in one of three different
+modes intended to probe various scaling aspects of ASyncRE and BigJob. All runs
+were given a wall time of one hour (with appropriate extrapolations). The three
+modes were as follows:
+\begin{enumerate}[I]
+\item (IMPACT systems 1-2, MM) \brnote{Left for Melissa}
+\item (AMBER system 1, MM-US) Fixed Pilot size and approximately fixed cycle
+  length (in CPU time) while varying the number of concurrent jobs ({\em i.e.}
+  the number of cores per job) and the simulation time of each cycle. 
+\item (AMBER system 2, QM/MM-US) Fixed replica count (192) while varying the
+  Pilot size % and the frequency of coordination?
+\end{enumerate}
 
 %$T_c = T_x + T_Q$ where terms are total time to completion, run time,
 %time waiting in queue. we do not measure $T_W$. We  
-
-Mode II:  we vary cycle time ie. interval between exchanges. \jhanote{brian}
-
-
-Mode III: QM/MM -- vary bigjob/pilot size.
-
 
 \subsection{Results}
 
@@ -809,11 +868,12 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
   NSF Cyber-enabled Discovery and Innovation Award (CHE-1125332), and
   NSF-ExTENCI (OCI-1007115). This work has also been made possible
   thanks to computer resources provided by TeraGrid TRAC award
-  TG-MCB090174.  BKR is grateful for additional resources from a Peter
-  Kollman Graduate Award in Supercomputing through the ACS Division of
+  TG-MCB090174.  BKR acknowledges computational resources from a 
+  Peter Kollman Graduate Award in Supercomputing through the ACS Division of 
   Computers in Chemistry and NICS. We are grateful to Yaakoub
   El-Khamra and Tommy Minyard (TACC) for help with debugging and
   performance tunning of BigJob on Lonestar, Ranger and Stampede.}
+
 \bibliographystyle{abbrv}
 %\bibliography{saga,saga-old,literature,replica-exchange}
 %\bibliography{saga2,literature,replica-exchange}
