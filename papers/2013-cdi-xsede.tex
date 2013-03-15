@@ -97,17 +97,71 @@ Shantenu Jha \\
 \maketitle
 
 \begin{abstract}
+  
+  Replica-Exchange represent a powerful class of algorithms that are
+  used for enhanced configurational and energetic sampling in a range
+  of physical systems. Computationally they represent a type of
+  applications with multiple scales of communication; at a
+  fine-grained level there is often communication with a replica,
+  typically an MPI process. At a coarse-grained level -- both
+  temporally as well as in data amount exchanged, the replicas
+  communicate with other replicas. In this paper, we outline a novel
+  framework that we have developed that supports the large-scale and
+  flexible execution of a number of replicas. The framework is
+  flexible in the sense that it supports different coupling schemes
+  between the replicas, and is agnostic to the specific underlying
+  simulation -- classical or quantum, single-core simulation or a
+  parallel simulation.  As a measure of the scalability of the
+  framework, we measure the number of nanoseconds simulated a day, as
+  a function of the number of replicas. In spite of the increasing
+  communication and coordination requirements as a function of the
+  number of replicas, our framework supports the execution of a
+  thousand replicas without significant overhead. Furthermore, as
+  representative of the efficiency of the framework, the number of
+  nanoseconds simulated in twenty-four hours as a function of replicas
+  remains essentially constant. Although there are several specific
+  aspects that will benefit from further optimization, a first working
+  prototype has the ability to fundamentally change the scale of
+  replica-exchange simulations possible on production distributed
+  cyberinfrastructure such as XSEDE, as well as support novel usage
+  modes on these infrastructure. This paper also represents the
+  release of the framework to the broader biophysical simulation
+  community and provides details on its usage.}
 
-  A description of the computational workflow, viz., the different
-  machines/resources used, how many ensembles we simulated, data
-  volumnes managed etc., (ii) any computational performance issues
-  including (a) measuring "efficiency" as the number of distributed
-  resources utilized goes as measured by $T_c$ (time to completion),
-  (b) $T_c$ as a function of the number of replicas, and (iii) a
-  description of the software infrastructure that is employed to
-  enable distributed replica-exchange on XSEDE.
-  \jhanote{SJ}
+  that it can support different
+  
+  
 \end{abstract}
+
+\jhanote{A description of the computational workflow, viz., the
+  different machines/resources used, how many ensembles we simulated,
+  data volumnes managed etc., (ii) any computational performance
+  issues including (a) measuring "efficiency" as the number of
+  distributed resources utilized goes as measured by $T_c$ (time to
+  completion), %(b) $T_c$ as a function of the number of replicas, and
+  (iii) a description of the software infrastructure that is employed
+  to enable distributed replica-exchange on XSEDE.}
+
+\jhanote{Describe the need for large-scale simulations. Describe what
+  is unique to replica-exchange. Challenges that arise from loose,
+  intermittent (stochastic) coupling, as opposed to fixed exchanges}
+
+
+\jhanote{(i) algorithmic advances coupled with infrastructural
+  advances. (ii) the need for dynamic execution and resource
+  management, (iii) which is why we believe pilot-jobs is a good
+  abstraction (reference earlier work using BigJob). (iv) Novelty of
+  this work is: (A) marriage of an application library for flexible
+  replica-exchange simulations with scalable and dynamic resource
+  management, (B) demonstration of a framework for different and
+  tunable replica coupling schemes that can be used for QM and
+  classical examples.}
+ 
+\jhanote{Aim of this work is to present (i) the framework -- both
+  components, (ii) understand and characterize basic performance}
+
+
+
 
 \category{H.4}{Information Systems Applications}{Miscellaneous}
 %A category including the fourth, optional field follows...
@@ -132,16 +186,22 @@ as the number of replicas increases. Providing an approach that works
 across multiple replica sizes, replica numbers and coupling schemes
 both a software and conceptual challenge.
 
+
+The state of replicas is typically changing and they often change
+depending upon the outcome of the an exchange. Furthermore, resource
+assignment and scheduling is typically required after an exchange.
+Thus there is a need for finer grained resource management than is
+typically provided by the batch-queue level resource management.  In
+order to support these requirements, we adopt a pilot-job based
+mechanism to resource management.
+ 
+
 To address some of these issues, there has been recent progress
 towards a pilot-job based replica-exchange framework, that can support
 dynamic and scalable resource execution and management, and thereby
 provides the basis for a flexible and scalable formulation of
 replica-exchange. ..
 
-
-\jhanote{Describe the need for large-scale simulations. Describe what
-  is unique to replica-exchange. Challenges that arise from loose,
-  intermittent (stochastic) coupling, as opposed to fixed exchanges}
 
 Parallel Replica Exchange (RE) denotes a family of advanced
 conformational sampling algorithms widely employed in molecular
@@ -208,20 +268,6 @@ deployed built on the BigJob/SAGA distributed computing environment on
 XSEDE capable of scaling to arbitrarily large numbers of
 replicas. Illustrative applications of the software to large-scale
 multi-dimensional RE problems are presented and analyzed ...
-
-\jhanote{(i) algorithmic advances coupled with infrastructural
-  advances. (ii) the need for dynamic execution and resource
-  management, (iii) which is why we believe pilot-jobs is a good
-  abstraction (reference earlier work using BigJob). (iv) Novelty of
-  this work is: (A) marriage of an application library for flexible
-  replica-exchange simulations with scalable and dynamic resource
-  management, (B) demonstration of a framework for different and
-  tunable replica coupling schemes that can be used for QM and
-  classical examples.}
- 
-\jhanote{Aim of this work is to present (i) the framework -- both
-  components, (ii) understand and characterize basic performance}
-
 
 \section{Scientific Problem}\label{sec:requirements}
 
