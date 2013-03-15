@@ -257,7 +257,8 @@ hundreds to thousands of replicas. However, current implementations
 of the replica exchange method in use by the computational chemistry
 community are severely limited in terms of it scalability and control
 when many replicas are involved. In conventional implementations of
-RE, simulations progress in unison and exchanges occur in a
+RE\cite{Jiang_JChemTheoryComput_2012_v8_p4672},\brnote{2012 JCTC paper describing synchronous RE on BlueGene/P} 
+simulations progress in unison and exchanges occur in a
 synchronous manner whereby all replicas must reach a pre-determined
 state (typically the completion of a certain number of MD steps),
 before exchanges are performed. This synchronous approach has a number
