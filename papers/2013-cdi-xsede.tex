@@ -710,15 +710,27 @@ if __name__ == '__main__':
 
 \subsection{Systems Investigated} 
 
-(i) Systems 1 -3 , (ii) $N_R$ vary from 4, 16, 32, 64, 128, 512, (iii)
-$T_c = T_W + T_Q$ where terms are total time to completion, run time,
-time waiting in queue.  (iv) each exchange takes place approximately
-1ps (v) each replica runs for 1ns
+\jhanote{1 sentence desription of the phyiscal systems}
 
+Systems 1-4: 1 QM/MM AMBER, 1 classical AMBER, 2 Impact
 
 \subsection{Experimental Configuration}
-(i) Fixed num. of cores [Fixed Pilots, varying resources] (ii) ``Flood"
-XSEDE -- minimize the Time to Wait
+\jhanote{how experiments were performed} 
+
+Common to mode I and II: (i) We run each configuration for 1 hour.
+(ii) Fixed num. of cores [Fixed Pilots, varying resources]
+
+Mode I: (ii) $N_R$ vary from 4, 16, 32, 64, 128, 512 \jhanote{Emilio,
+ Melissa to write}
+
+%$T_c = T_x + T_Q$ where terms are total time to completion, run time,
+%time waiting in queue. we do not measure $T_W$. We  
+
+Mode II:  we vary cycle time ie. interval between exchanges. \jhanote{brian}
+
+
+Mode III: QM/MM -- vary bigjob/pilot size.
+
 
 \subsection{Results}
 
@@ -752,12 +764,11 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 
 
 \section*{Acknowledgement}
-\footnotesize{Additional important
-  funding has been provided by NSF-ExTENCI (OCI-1007115) Important
-  funding for SAGA has been provided by the UK EPSRC grant number
-  GR/D0766171/1 (via OMII-UK) and HPCOPS NSF-OCI 071087. Bishop were
-  supported by NIH-R01GM076356. BKR is grateful for additional resources
-  from a Peter Kollman Graduate Award in Supercomputing through the 
+\footnotesize{Additional important funding has been provided by
+  NSF-ExTENCI (OCI-1007115) Important funding for SAGA has been
+  provided by the UK EPSRC grant number GR/D0766171/1 (via OMII-UK)
+  and HPCOPS NSF-OCI 071087. BKR is grateful for additional resources
+  from a Peter Kollman Graduate Award in Supercomputing through the
   ACS Division of Computers in Chemistry and NICS.}
 
 \bibliographystyle{abbrv}
