@@ -1,0 +1,30 @@
+# Independent quantities:
+# replicas = 576
+# TOTAL_CORES = 720
+# WALL_TIME = 1 hr
+# cycle time (approximately) = 2 minutes
+# sim. time per MD step = 1e-6 ns
+#
+# Dependent quantities:
+#
+# SUBJOB_CORES - set in config file, 6, 12, 24, and 48 cores
+# Nreps_running - number of replicas running (TOTAL_CORES/SUBJOB_CORES)
+# steps per cycle - number of MD steps per cycle
+# completed cycles - number of completed runs recognized by BigJob 
+#                    $ grep "Replica:" <BigJobLog> | wc -l
+# avg/std cycle time (Amber) - avg/std of elapsed run time registered by Amber 
+#                    $grep "Elapsed(s)" <AmberOut> | awk 'END{print $4}' 
+# avg/std cycle time (BigJob) - avg/std of elapsed run time reported by BigJob
+#                    $grep "Replica:" <BigJobLog> | awk '{...extract data on $8-$5...}'
+#
+# SUBJOB_CORES Nreps_running <steps per cycle> <completed cycles> <avg/std cycle time (s) (Amber)>
+ 6 120 22000 1560 165.2 1.3 223.2  64.0
+12  60 28000 608  117.2 1.2 211.6 112.2
+24  30 41000 591  116.0 1.2 155.0  39.8 
+#48  15 50000  55  116.9 1.2 215.8  69.2
+#
+# Derived quantities:
+# simulation time (ns) = <completed cycles>*<steps per cycle>*<sim. time per MD step>*WALL_TIME
+# simulation speed is also a standard metric in the MD community
+# simulation speed (ns/day) = <simulation time (ns/hr)>*(24 hr/day)
+#
