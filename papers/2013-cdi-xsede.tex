@@ -44,6 +44,11 @@
  \title{A Framework for Flexible and Scalable Replica-Exchange on
    Production Distributed CI}
 
+%Brian Raddak, Melissa Romanus, Emilio Gallichio, Taisung Lee, Ole
+%Weidner, Ron Levy, Darrin York and Shantenu Jha
+
+
+
 % \numberofauthors{5} 
 % \author{
 % \alignauthor
@@ -93,6 +98,24 @@
 
 \section{Introduction}
 \jhanote{SJ + Emilio Section}
+
+Although the coupling between replicas is conceptually simple and
+relatively ``easy'', replica-exchange applications represent the
+general challenge of scaling many loosely-coupled simulations. The
+challenge arises from the fact that although most communication is
+internal to the individual replicas which are large-scale MPI-style
+simulations, there exist a less frequent but often a slow
+communication mode which increases in complexity, importance and cost
+as the number of replicas increases. Providing an approach that works
+across multiple replica sizes, replica numbers and coupling schemes
+both a software and conceptual challenge.
+
+To address some of these issues, there has been recent progress
+towards a pilot-job based replica-exchange framework, that can support
+dynamic and scalable resource execution and management, and thereby
+provides the basis for a flexible and scalable formulation of
+replica-exchange. ..
+
 
 \jhanote{Describe the need for large-scale simulations. Describe what
   is unique to replica-exchange. Challenges that arise from loose,
