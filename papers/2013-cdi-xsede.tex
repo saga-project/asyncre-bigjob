@@ -246,8 +246,16 @@ U(x;\beta,\lambda) = \beta V(x) + \beta w_{\rm Go} V_{\rm Go}(x) \,
 \end{equation}
 where $V(x)$ is the unbiased potential energy, $V_{\rm Go}$ is a biasing potential favoring the formation of natively folded conformations, and $w_{\rm Go}$ is an energy weight ranging between 0 (no bias) to $0.42$ in this case (maximal bias). This system is studied with up to 336 \egnote{modify as needed} replicas corresponding to all possible combinations of 24 temperatures between 300 and 600K and 14 values of  $w_{\rm Go}$ between 0 and $0.42$. The purpose of this protocol is to bias the system so as to enhance the rate of folding and unfolding at multiple temperatures.
 
-... umbrella sampling ...
+The last two applications employ multi-dimensional RE umbrella sampling (US), but in two quite different scenarios, thus demonstrating the broad applicability of the approach. In all multi-dimensional RE umbrella sampling simulations, the dimensionless potential energy can be written as
+\begin{equation}
+U(x;\beta,\lambda) = \beta V_0(x) + \beta \sum_{n=1}^N V_n(x_n)
+\end{equation}
+where $V_0(x)$ is the unbiased potential and $V_n(x_n)$ is a bias potential applied to the $n$th bias coordinate in order to localize sampling to high energy regions of configuration space that might not otherwise be sampled. For convenience (as is typically done) we choose $V_n(x_n)$ to have a harmonic form.  
 
+In the first RE-US scheme, the well-known alanine dipeptide model for protein the backbone is examined, and conformational biases are applied to the $\psi$/$\phi$ torsion angles. The complete range of 360 degrees is divided into 15 degree intervals for both angles, resulting in 576 replicas. Although this is a common test case for enhanced sampling protocols
+% Uncomment these citations if desired (see MDreferences.bib)
+%%\cite{Chodera_JChemTheoryComput_2007_v3_p26,Chodera_JChemPhys_2011_v135_p194110}
+, we increase the demand here by treating the solvent bath explicitly. The second application is a base-catalyzed phosphoryl transfer reaction in solution, a prototype reaction for multiple protein and ribonucleic acid enzymes. Biases are applied to the breaking and forming bonds. The chemically reactive solute is treated quantum mechanically, whereas the solute is treated by standard molecular mechanics. The advantages of a RE approach are especially important in this system due to the limited scaling of such a potential (unlike classical force fields, it is not pair-wise decomposeable). That is, RE umbrella sampling is one of the most promising ways to increase the feasible application of quantum potentials via increased sampling efficiency.
 
 \subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
 
@@ -416,8 +424,8 @@ engine modules are available for the AMBER and IMPACT MD programs. A
 similar modular mechanism provides support for arbitrary RE schemes
 (temperature, Hamiltonian, etc.), including arbitrary multidimensional
 combinations of these (such as 2D RE temperature/Hamiltonian). The
-software is currently distributed with modules for multidimensional RE
-umbrella sampling with AMBER \egnote{[AMBER US references]}, and BEDAM $\lambda$-RE alchemical binding
+software is currently distributed with modules for multi-dimensional RE
+umbrella sampling with AMBER\cite{AMBER12}, and BEDAM $\lambda$-RE alchemical binding
 free energy calculations with the IMPACT MD engine \egnote{[BEDAM papers]}.
 
 \begin{figure}
@@ -678,10 +686,13 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
   funding has been provided by NSF-ExTENCI (OCI-1007115) Important
   funding for SAGA has been provided by the UK EPSRC grant number
   GR/D0766171/1 (via OMII-UK) and HPCOPS NSF-OCI 071087. Bishop were
-  supported by NIH-R01GM076356.}
+  supported by NIH-R01GM076356. BKR is grateful for additional resources
+  from a Peter Kollman Graduate Award in Supercomputing through the 
+  ACS Division of Computers in Chemistry and NICS.}
 
 \bibliographystyle{abbrv}
 %\bibliography{saga,saga-old,literature,replica-exchange}
 %\bibliography{saga2,literature,replica-exchange}
+\bibliography{MDreferences}
 
 \end{document}
