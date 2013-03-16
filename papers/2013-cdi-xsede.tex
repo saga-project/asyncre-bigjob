@@ -55,14 +55,12 @@ Brian Radak \\
        \affaddr{Piscataway, NJ 08854}\\
        \affaddr{Department of Chemistry, University of Minnesota}\\
        \affaddr{Minneapolis, MN 55455}\\
-      \email{radakb@biomaps.rutgers.edu}
+      \email{x}
 \alignauthor
 Melissa Romanus\\
-      \affaddr{RADICAL}\\
-       \affaddr{Department of Electrical \\ and Computer Engineering}\\
        \affaddr{Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
-      \email{melissa.romanus\\@rutgers.edu}
+      \email{x}
 \alignauthor
 Emilio Gallicchio\\
        \affaddr{BioMaPS Institute for Quantitative Biology and Department of Chemistry and Chemical Biology, Rutgers University}\\
@@ -78,11 +76,9 @@ Emilio Gallicchio\\
       \email{taisung@biomaps.rutgers.edu}
 \alignauthor
 Ole Weidner \\
-      \affaddr{RADICAL}\\
-       \affaddr{Department of Electrical \\ and Computer Engineering}\\
        \affaddr{Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
-      \email{ole.weidner@rutgers.edu}
+      \email{xxx}
 \alignauthor 
 Darrin M. York \\
        \affaddr{BioMaPS Institute for Quantitative Biology and Department of 
@@ -117,11 +113,9 @@ Ronald M Levy \\
        \email{ronlevy@lutece.rutgers.edu}
 \alignauthor 
 Shantenu Jha \\
-      \affaddr{RADICAL}\\
-       \affaddr{Department of Electrical \\ and Computer Engineering}\\
        \affaddr{Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
-       \email{shantenu.jha@rutgers.edu}
+       \email{xxx}
 }
 
 \maketitle
@@ -837,7 +831,7 @@ underlying PilotJob system, (2) ASyncRE as  the replica exchange application
 framework, and (3) AMBER / IMPACT as the  application kernels.
 
 Each of the three component has its own performance characteristics and 
-can introduce overhead to the application. We define overhead from an 
+can introduce overhead to the overall application. We define overhead from an 
 application perspective as the fraction of the application runtime that is 
 not spent on running the application kernels, but on application management 
 logic, communication and coordination.
@@ -860,9 +854,17 @@ $T^{O}_{K}$ as the overhead introduced in the application kernel itself:
 
 $$ TTC_s = T_R + T^{O}_{BJ} + T^{O}_{RE} + T^{O}_{K}$$
 
-Application kernel overhead can occur for example if the kernel supports 
+Application kernel overhead occurs for example if the kernel supports 
 thread-level parallelism but doesn't scale linearly with the number of 
-threads. Overhead in ASyncRE captures the time  
+threads. Overhead in ASyncRE occurs when the framework executes management 
+tasks, e.g., finding matching exchange partners for a set of replicas and 
+no computation happens during that time. Lastly, we consider BigJob 
+overhead as the time that is spent by BigJob on the placement and monitoring 
+of subjobs during which no computation occurs. This includes network
+round-trip time for communication via Redis.
+
+
+
 
 \subsection{Systems Investigated} 
 
