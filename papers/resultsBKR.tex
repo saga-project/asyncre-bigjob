@@ -4,10 +4,12 @@
   Scaling results for ASyncRE/BigJob with the AMBER MD engine employing a
   scalable molecular mechanics force field. Each run consisted of 720 cores
   divided amongst differing numbers of replicas (the pool of potential 
-  replicas was fixed at 576). Ideal performance (black line) would be obtained
-  if there is no overhead in launching or coordinating simulations. Increasing
-  the frequency with which replicas are ``launched'' results in diminished
-  performance, although the penalty for doing so appears to be fairly uniform
+  replicas was fixed at 576) and coordination frequencies ($\omega$, {\em i.e.}
+  the frequency with which simulations are started/stopped and exchanged). 
+  Ideal performance (black line) would be obtained if there is no overhead in 
+  launching or coordinating simulations ($\omega$ = 0). Increasing the 
+  frequency with which replicas are ``launched'' results in diminished 
+  performance, although the penalty for doing so appears to be fairly uniform 
   at higher frequncies (blue line).
   \label{fig:amber_mm}  
 }
@@ -83,4 +85,4 @@ running a serial quantum mechanical/molecular mechanical potential with RE-US
 there is no apparent cost for coordinating additional simulations. Although 
 this may become an issue when individual simulation cycles become shorter
 (Figure \ref{fig:amber_mm}), this is fortunately not often the case for such 
-poorly (or non-) scaling simulation methods.
+poorly (or non-) scaling simulation methods.
