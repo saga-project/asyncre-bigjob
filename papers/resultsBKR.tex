@@ -17,9 +17,9 @@
 
 Standard REMD simulations employing molecular mechanics (MM) force fields offer 
 parallel scaling in both the number of replicas and the number of processors 
-allocated to each replica. An optimal scheme should balance the efficiency 
-gains of both types of scaling in order to produce the most simulation time in 
-real time. In order to assess the efficiency of ASyncRE/BigJob in combination 
+allocated to each replica. An optimal scheme would balance the efficiency gains
+of both types of scaling in order to produce the most simulation time in real 
+time. In order to assess the efficiency of ASyncRE/BigJob in combination 
 with the AMBER MD engine, a fixed size pilot job of 720 cores was allocated 
 (AMBER system 1 under Experimental Configuration) with various numbers of cores
 allotted to each simulation. In this scheme, the number of simulations being 
@@ -40,19 +40,6 @@ of the number of simulations being coordinated. This means that, at present,
 one can generally increase the number of replicas being simulated with only a
 minor hit to performance.
 
-\brnote{Move this to the discussion?}
-Although in general one wants to produce as much simulation time as possible, 
-it is worthwhile to note that not all simulation time is equal, in the sense 
-that multiple short simulations do not usually contain as much statistical 
-information as a single short simulation. In fact, the basic aim of REMD is to
-increase the statistical power of multiple simulations by facilitating the
-exchange of information between them in a concerted fashion. This should be
-kept in mind when analyzing performance graphs, as one might be tempted to run
-as many small simulations as possible in an attempt maximize simulation speed.
-For real applications and performance optimizations, other more physically and
-statistically relevant metrics must be employed, but these are beyond the
-scope of the present work.
-
 \begin{figure}
 \includegraphics[width=3in]{amber_data/qmmm.eps}
 \caption{
@@ -60,10 +47,10 @@ scope of the present work.
   serial quantum mechanical/molecular mechanical potential. The total number
   of cores allocated for the full REMD run was varied, while each simulation
   was run on a single core. As should be expected, performance (as measured in
-  ns/day) increases linearly (green line) with the number of simulations 
+  ns/day) increases linearly (red fit line) with the number of simulations 
   running at any given point in time. It is perhaps relevant to note that the
   performance of individual simulations is also quite consistent at different
-  core counts (blue points), verifying that the linear scaling is in fact
+  core counts (green fit line), verifying that the linear scaling is in fact
   representative of an increase in the number of simulations running and not
   just an increased core count.
   \label{fig:amber_qmmm}  
