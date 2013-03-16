@@ -230,32 +230,6 @@ Shantenu Jha \\
   components, (ii) understand and characterize basic performance}
 
 
-Although the coupling between replicas is conceptually simple and
-relatively ``easy'', replica-exchange applications represent the
-general challenge of scaling many loosely-coupled simulations. The
-challenge arises from the fact that although most communication is
-internal to the individual replicas which are large-scale MPI-style
-simulations, there exist a less frequent but often a slow
-communication mode which increases in complexity, importance and cost
-as the number of replicas increases. Providing an approach that works
-across multiple replica sizes, replica numbers and coupling schemes
-both a software and conceptual challenge.
-
-
-The state of replicas is typically changing and they often change
-depending upon the outcome of the an exchange. Furthermore, resource
-assignment and scheduling is typically required after an exchange.
-Thus there is a need for finer grained resource management than is
-typically provided by the batch-queue level resource management.  In
-order to support these requirements, we adopt a pilot-job based
-mechanism to resource management.
- 
-
-To address some of these issues, there has been recent progress
-towards a pilot-job based replica-exchange framework, that can support
-dynamic and scalable resource execution and management, and thereby
-provides the basis for a flexible and scalable formulation of
-replica-exchange. ..
 
 
 Parallel Replica Exchange (RE)\cite{hansmann1999new,Felts:Harano:Gallicchio:Levy:2004,Andrec2005,Mitsutake2010} denotes a family of advanced
@@ -286,7 +260,29 @@ hardware and networking resources, but rather to the lack of suitable
 software technologies capable of efficiently harnessing this latent
 computational power.
 
-Many applications areas, such as the ones illustrated in this report,
+Although the coupling between replicas is conceptually simple and
+relatively ``easy'', replica-exchange applications represent the
+general challenge of scaling many loosely-coupled simulations. The
+challenge arises from the fact that although most communication is
+internal to the individual replicas which are large-scale MPI-style
+simulations, there exist a less frequent but often a slow
+communication mode which increases in complexity, importance and cost
+as the number of replicas increases. Providing an approach that works
+across multiple replica sizes, replica numbers and coupling schemes
+both a software and conceptual challenge. The state of replicas is typically changing and they often change
+depending upon the outcome of the an exchange. Furthermore, resource
+assignment and scheduling is typically required after an exchange.
+Thus there is a need for finer grained resource management than is
+typically provided by the batch-queue level resource management. 
+
+To address some of these issues, there has been recent progress
+towards  asynchronous RE formulations based on a pilot-job framework, that can support
+dynamic and scalable resource execution and management, and thereby
+provides the basis for a flexible and scalable formulation of
+replica-exchange on XSEDE. These developments are the subject of this report.
+
+
+Many applications areas, such as the ones illustrated here,
 benefit greatly from multi-dimensional RE implementations employing
 hundreds to thousands of replicas. However, current implementations
 of the replica exchange method in use by the computational chemistry
