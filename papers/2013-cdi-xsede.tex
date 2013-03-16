@@ -863,7 +863,12 @@ overhead as the time that is spent by BigJob on the placement and monitoring
 of subjobs during which no computation occurs. This includes network
 round-trip time for communication via Redis.
 
-
+To measure the different aspects of application overhead, instrumentation 
+of all three components is necessary. This is still work in progress and 
+the experiments and results described below only implement probes on a 
+very high level. Nevertheless, the model helps us to reason about the observed 
+differences in application performance. Detailed measurements and 
+instrumentation of BigJob and ASyncRE are planned for the future. 
 
 
 \subsection{Systems Investigated} 
