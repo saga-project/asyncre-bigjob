@@ -323,7 +323,7 @@ In this work we present ASyncRE, an asynchronous RE software utility
 deployed built on the BigJob/SAGA distributed computing environment on
 XSEDE capable of scaling to arbitrarily large numbers of
 replicas. Illustrative applications of the software to large-scale
-multi-dimensional RE problems are presented and analyzed ...
+multi-dimensional RE problems are presented and analyzed.
 
 \section{Scientific Problem}\label{sec:requirements}
 
@@ -443,9 +443,23 @@ important in QM simulations, such as the example system presented here.  RE-US
 is one of the most promising ways to increase the feasible application of 
 quantum potentials via increased sampling efficiency.
 
-\subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
+\subsection{Computational Requirements}
 
-%\subsection{Computational Requirements}
+As introduced above and further elaborated below, in order to
+efficiently perform large scale RE calculations of this kind on XSEDE
+we adopt an asynchronous formulation of RE, which, unlike conventional
+synchronous implementations, requires only a fraction of the computing
+resources nominally required by the application [(number of replicas)
+  times (number of CPU cores per replica)]. Furthermore the loss of
+computing resources does not cause termination of the
+application. Conversely, it allows the expansion of the application
+dynamically as new resources become available.
+
+In the current implementation, communication between pairs of replicas
+is achieved through a shared filesystem while they are temporarily
+checkpointed and not actively running. This approach has the advantage
+of being very general and well supported by BigJob. It also does not
+require source code modification of legacy MD kernels.
 
 \section{Software Environment}
 
