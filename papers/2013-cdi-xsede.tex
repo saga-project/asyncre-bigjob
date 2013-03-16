@@ -231,32 +231,6 @@ Shantenu Jha \\
   components, (ii) understand and characterize basic performance}
 
 
-Although the coupling between replicas is conceptually simple and
-relatively ``easy'', replica-exchange applications represent the
-general challenge of scaling many loosely-coupled simulations. The
-challenge arises from the fact that although most communication is
-internal to the individual replicas which are large-scale MPI-style
-simulations, there exist a less frequent but often a slow
-communication mode which increases in complexity, importance and cost
-as the number of replicas increases. Providing an approach that works
-across multiple replica sizes, replica numbers and coupling schemes
-both a software and conceptual challenge.
-
-
-The state of replicas is typically changing and they often change
-depending upon the outcome of the an exchange. Furthermore, resource
-assignment and scheduling is typically required after an exchange.
-Thus there is a need for finer grained resource management than is
-typically provided by the batch-queue level resource management.  In
-order to support these requirements, we adopt a pilot-job based
-mechanism to resource management.
- 
-
-To address some of these issues, there has been recent progress
-towards a pilot-job based replica-exchange framework, that can support
-dynamic and scalable resource execution and management, and thereby
-provides the basis for a flexible and scalable formulation of
-replica-exchange. ..
 
 
 Parallel Replica Exchange (RE)\cite{hansmann1999new,Felts:Harano:Gallicchio:Levy:2004,Andrec2005,Mitsutake2010} denotes a family of advanced
@@ -287,7 +261,29 @@ hardware and networking resources, but rather to the lack of suitable
 software technologies capable of efficiently harnessing this latent
 computational power.
 
-Many applications areas, such as the ones illustrated in this report,
+Although the coupling between replicas is conceptually simple and
+relatively ``easy'', replica-exchange applications represent the
+general challenge of scaling many loosely-coupled simulations. The
+challenge arises from the fact that although most communication is
+internal to the individual replicas which are large-scale MPI-style
+simulations, there exist a less frequent but often a slow
+communication mode which increases in complexity, importance and cost
+as the number of replicas increases. Providing an approach that works
+across multiple replica sizes, replica numbers and coupling schemes
+both a software and conceptual challenge. The state of replicas is typically changing and they often change
+depending upon the outcome of the an exchange. Furthermore, resource
+assignment and scheduling is typically required after an exchange.
+Thus there is a need for finer grained resource management than is
+typically provided by the batch-queue level resource management. 
+
+To address some of these issues, there has been recent progress
+towards  asynchronous RE formulations based on a pilot-job framework, that can support
+dynamic and scalable resource execution and management, and thereby
+provides the basis for a flexible and scalable formulation of
+replica-exchange on XSEDE. These developments are the subject of this report.
+
+
+Many applications areas, such as the ones illustrated here,
 benefit greatly from multi-dimensional RE implementations employing
 hundreds to thousands of replicas. However, current implementations
 of the replica exchange method in use by the computational chemistry
@@ -324,7 +320,7 @@ In this work we present ASyncRE, an asynchronous RE software utility
 deployed built on the BigJob/SAGA distributed computing environment on
 XSEDE capable of scaling to arbitrarily large numbers of
 replicas. Illustrative applications of the software to large-scale
-multi-dimensional RE problems are presented and analyzed ...
+multi-dimensional RE problems are presented and analyzed.
 
 \section{Scientific Problem}\label{sec:requirements}
 
@@ -444,9 +440,23 @@ important in QM simulations, such as the example system presented here.  RE-US
 is one of the most promising ways to increase the feasible application of 
 quantum potentials via increased sampling efficiency.
 
-\subsection{Describing the Replica-Exchange ``Workflow'' } \label{}
+\subsection{Computational Requirements}
 
-%\subsection{Computational Requirements}
+As introduced above and further elaborated below, in order to
+efficiently perform large scale RE calculations of this kind on XSEDE
+we adopt an asynchronous formulation of RE, which, unlike conventional
+synchronous implementations, requires only a fraction of the computing
+resources nominally required by the application [(number of replicas)
+  times (number of CPU cores per replica)]. Furthermore the loss of
+computing resources does not cause termination of the
+application. Conversely, it allows the expansion of the application
+dynamically as new resources become available.
+
+In the current implementation, communication between pairs of replicas
+is achieved through a shared filesystem while they are temporarily
+checkpointed and not actively running. This approach has the advantage
+of being very general and well supported by BigJob. It also does not
+require source code modification of legacy MD kernels.
 
 \section{Software Environment}
 
@@ -940,19 +950,6 @@ the fact that with more than 6 cores we are going off-chip.
 \input{resultsBKR}
 
 \section{Discussion}
-
-Although in general one wants to produce as much simulation time as possible,
-it is worthwhile to note that not all simulation time is equal, in the sense
-that multiple short simulations do not usually contain as much statistical
-information as a single short simulation. In fact, the basic aim of REMD is to
-increase the statistical power of multiple simulations by facilitating the
-exchange of information between them in a concerted fashion. This should be
-kept in mind when analyzing performance graphs, as one might be tempted to run
-as many small simulations as possible in an attempt maximize simulation speed.
-For real applications and performance optimizations, other more physically and
-statistically relevant metrics must be employed, but these are beyond the
-scope of the present work.
-
 
 \jhanote{Overall Productivity is Scientific efficiency vs. Computing  efficiency!}
 
