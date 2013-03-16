@@ -243,7 +243,7 @@ provides the basis for a flexible and scalable formulation of
 replica-exchange. ..
 
 
-Parallel Replica Exchange (RE) denotes a family of advanced
+Parallel Replica Exchange (RE)\cite{hansmann1999new,Felts:Harano:Gallicchio:Levy:2004,Andrec2005,Mitsutake2010} denotes a family of advanced
 conformational sampling algorithms widely employed in molecular
 simulations of chemical and biological systems. The key aspect of RE
 algorithms is that multiple molecular dynamics (MD) threads (referred
@@ -254,7 +254,7 @@ space by communicating and stochastically exchanging their state
 assignments with those of other replicas. Exchanges are controlled by
 microscopic reversibility requirements ensuring that feasible
 thermodynamic ensembles are sampled at each state.  It has been shown
-in many contexts \egnote{[references]} that RE moves enhance
+in many contexts\cite{Woods2003,Murata2004,Bussi2006,Liu2006,Yeh2008,Meng2010,Gallicchio2011} that RE moves enhance
 conformational mixing relative to multiplexed serial conformational
 sampling algorithms based on teams of non-communicating
 MD threads. Replica exchange algorithms indeed provide some of the
@@ -293,7 +293,7 @@ synchronous RE approach from being a feasible solution for large scale
 RE deployments.
 
 As earlier prototypical implementations of asynchronous RE (aRE)
-algorithms \egnote{[Gallicchio 2008]} have illustrated, the replica
+algorithms\cite{Gallicchio2008} have illustrated, the replica
 exchange method itself does not impose the restriction that exchanges
 should occur synchronously across all threads and that all of the MD
 threads should run at the same time. The basic idea of asynchronous
@@ -353,12 +353,12 @@ states of the system by letting replicas temporarily visit high temperatures
 where barrier crossings are more rapid. However, REMD schemes can involve 
 exchanges of any number of state parameters. For example, schemes involving the
 exchange of more than one parameter are often referred to as 
-\emph{multi-dimensional} REMD schemes.
+\emph{multi-dimensional} REMD schemes.\cite{Mitsutake2010}
 
 Any REMD scheme is required to satisfy microscopic reversibility. In the 
 present context this is ensured by structuring exchanges so that permutations 
 of state parameters assigned to replicas are distributed according to the 
-discrete unnormalized probability distribution:
+discrete unnormalized probability distribution:\cite{chodera2011replica}
 \begin{equation}
 p(\{j_M\})=\exp\left[-\sum_{i=1}^M U(x_i;\beta_{j_i};\theta_{j_i})\right] \,
 \end{equation}
@@ -370,8 +370,7 @@ replica $i$.
 In this work we analyze four science application areas that benefit from the 
 application of multi-dimensional REMD protocols. The first is the modeling of 
 binding between a guest molecule (cyclooctanol) and a host 
-($\beta$-cyclodextrin) to form a supramolecular complex in solution 
-(Fig.\ \ref{}). In this case the dimensionless energy is:
+($\beta$-cyclodextrin) to form a supramolecular complex in solution.\cite{Gallicchio2012a} In this case the dimensionless energy is:\cite{Gallicchio2010}
 \begin{equation}
 U(x;\beta,\lambda) = \beta V_0(x) + \beta \lambda u(x) \,
 \end{equation}
@@ -392,7 +391,7 @@ is
 U(x;\beta,\lambda) = \beta V(x) + \beta w_{\rm Go} V_{\rm Go}(x) \,
 \end{equation}
 where $V(x)$ is the unbiased potential energy, $V_{\rm Go}$ is a biasing 
-potential favoring the formation of natively folded conformations, and 
+potential favoring the formation of natively folded conformations,\cite{pogorelov2004variations} and 
 $w_{\rm Go}$ is an energy weight ranging between 0 (no bias) to $0.42$ in this 
 case (maximal bias). This system is studied with up to 336 \egnote{modify as 
   needed} replicas corresponding to all possible combinations of 24 
@@ -897,6 +896,6 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 \bibliographystyle{abbrv}
 %\bibliography{saga,saga-old,literature,replica-exchange}
 %\bibliography{saga2,literature,replica-exchange}
-\bibliography{MDreferences,radical_rutgers}
+\bibliography{MDreferences,radical_rutgers,egallicc}
 
 \end{document}
