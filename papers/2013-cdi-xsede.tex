@@ -14,7 +14,7 @@
 \hyphenation{op-tical net-works semi-conduc-tor}
 
 \newif\ifdraft
-\drafttrue
+%\drafttrue
 \ifdraft
 \newcommand{\tbnote}[1]{ {\textcolor{magenta} { ***TcB: #1 }}}
 \newcommand{\jhanote}[1]{ {\textcolor{red} { ***SJ: #1 }}}
@@ -32,6 +32,7 @@
 \newcommand{\hfnote}[1]{}
 \newcommand{\tbnote}[1]{ {}}
 \newcommand{\brnote}[1]{ {}}
+\newcommand{\egnote}[1]{ {}}
 \fi
 
 \newcommand{\pilotjob}{Pilot-Job\xspace}
@@ -58,9 +59,10 @@ Brian Radak \\
       \email{x}
 \alignauthor
 Melissa Romanus\\
+       \affaddr{Electrical and Computer Engineering}\\
        \affaddr{Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
-      \email{x}
+      \email{melissa.romanus@rutgers.edu}
 \alignauthor
 Emilio Gallicchio\\
        \affaddr{BioMaPS Institute for Quantitative Biology and Department of Chemistry and Chemical Biology, Rutgers University}\\
@@ -113,9 +115,9 @@ Ronald M Levy \\
        \email{ronlevy@lutece.rutgers.edu}
 \alignauthor 
 Shantenu Jha \\
-       \affaddr{Rutgers University}\\
+       \affaddr{Electrical and Computer Engineering, Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
-       \email{xxx}
+       \email{shantenu.jha@rutgers.edu}
 }
 
 \maketitle
@@ -937,27 +939,24 @@ the fact that with more than 6 cores we are going off-chip.
 
 \section{Discussion}
 
-\jhanote{Overall Productivity is Scientific efficiency vs. Computing
-  efficiency!}
+%\jhanote{Overall Productivity is Scientific efficiency vs. Computing  efficiency!}
 
-\subsection{Experience}
+%\subsection{Experience}
 
-\subsubsection{Issue of Resiliency/Redundacy} Emilio has interesting
-antidotes -- nodes crashing and RE starts limping but as nodes got
-rebooted, started speeding up.  Experience --> Old to New Aspects
-\texttt{get\_state()} - State monitoring capability
+%\subsubsection{Issue of Resiliency/Redundacy} Emilio has interesting
+%antidotes -- nodes crashing and RE starts limping but as nodes got
+%rebooted, started speeding up.  Experience --> Old to New Aspects
+%\texttt{get\_state()} - State monitoring capability
 
+%\subsection{Future Work}
 
-\subsection{Future Work}
-
-\subsubsection{Multiple pilots}
+%\subsubsection{Multiple pilots}
 
 % \subsubsection{Local}
-\subsubsection{Logically Distributed}
-\subsubsection{Physically Distributed}
+%\subsubsection{Logically Distributed}
+%\subsubsection{Physically Distributed}
 
-\subsubsection{Different Exchange Modes}
-
+%\subsubsection{Different Exchange Modes}
 
 \subsection{Conclusion}
 
