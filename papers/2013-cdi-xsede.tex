@@ -148,22 +148,34 @@ Shantenu Jha \\
 \section{Introduction}
 
 \jhanote{ A description of the computational workflow, viz., the
-  different machines/resources used, how many ensembles we
-  simulated, data volumnes managed etc., (ii) any computational
-  performance issues including (a) measuring "efficiency" as the
-  number of distributed resources utilized goes as measured by $T_c$
-  (time to completion), (b) $T_c$ as a function of the number of
-  replicas, and (iii) a description of the software infrastructure
-  that is employed to enable distributed replica-exchange on XSEDE.}
+  different
+ machines/resources used, how many ensembles we
+  simulated, data
+ volumnes managed etc., (ii) any computational
+  performance issues
+ including (a) measuring "efficiency" as the
+  number of distributed
+ resources utilized goes as measured by $T_c$
+  (time to completion),
+ (b) $T_c$ as a function of the number of
+  replicas, and (iii) a
+ description of the software infrastructure
+  that is employed to
+ enable distributed replica-exchange on XSEDE.}
 
-\brnote{Some ideas via Darrin's comments: The infrastructure
-  described herein is immediately applicable to several important
+\brnote{Some ideas via Darrin's comments:
+ The infrastructure
+  described herein is immediately applicable to several
+ important
   problems, including, but not limited to, probing the chemical
   mechanisms of enzymes via quantum mechanical/molecular mechanical 
   simulations. While such an approach has long been considered as
-  ideal, it has not widely been used due to difficulties in its
-  efficient implementation. The work here presents the immediate
-  possibility of its routine application across multiple software
+  ideal, it has
+ not widely been used due to difficulties in its
+  efficient implementation. The
+ work here presents the immediate
+  possibility of its routine application
+ across multiple software
   and hardware architectures.}
 
 
@@ -785,6 +797,28 @@ if __name__ == '__main__':
 \section{Large-Scale Replica Exchange on XSEDE: Experiments and
   Results}\label{sec:results}
 \mrnote{ CompSci's Section}
+
+\subsection{Performance Model}
+
+Like many complex distributed applications, replica exchange consists of
+multiple individually developed components that are combined and orchestrated to
+carry out the application workload. In our implementation of the replica
+exchange workflow, we identify three distinct  components: (1) BigJob as the
+underlying PilotJob system, (2) AsyncRE as  the replica exchange application
+framework, and (3) AMBER / IMPACT as the  application kernels.
+
+Each of the three component has its own performance characteristics and 
+can introduce overhead to the application. We define overhead from an 
+application perspective as the fraction of the application runtime that is 
+not spent on running the application kernels, but on application management 
+logic, communication and coordination.
+
+From an application point of view, the most important performance metric 
+is throughput, which is defined as nanoseconds of model simulation time 
+achieved per hour compute time on a given number of CPU cores:
+
+$$ = $$
+
 
 \subsection{Systems Investigated} 
 
