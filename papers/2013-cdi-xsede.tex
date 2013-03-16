@@ -828,7 +828,7 @@ Like many complex distributed applications, replica exchange consists of
 multiple individually developed components that are combined and orchestrated to
 carry out the application workload. In our implementation of the replica
 exchange workflow, we identify three distinct  components: (1) BigJob as the
-underlying PilotJob system, (2) AsyncRE as  the replica exchange application
+underlying PilotJob system, (2) ASyncRE as  the replica exchange application
 framework, and (3) AMBER / IMPACT as the  application kernels.
 
 Each of the three component has its own performance characteristics and 
@@ -839,10 +839,25 @@ logic, communication and coordination.
 
 From an application point of view, the most important performance metric 
 is throughput, which is defined as nanoseconds of model simulation time 
-achieved per hour compute time on a given number of CPU cores:
+achieved per hour compute time on a given number of CPU cores. This is 
+equivalent with the time to completion ($TTC$) for a specific number of 
+steps ($s$). On the lowest level, $TTC$ is the sum of the queue waiting time and 
+the application runtime:
 
-$$ = $$
+$$ TTC_s = T^{O}_Q + T_X $$
 
+However, if the overall runtime of the simulation is sufficiently long, 
+$T_Q$ becomes negligible. We split up $T_X$ into application 
+kernel runtime $T_R$ and overhead. Since overhead can occur in all three
+components, we define $T^{O}_{BJ}$ as the overhead introduced by BigJob,
+$T^{O}_{RE}$ as the overhead introduced by the AsyncRE package, and 
+$T^{O}_{K}$ as the overhead introduced in the application kernel itself:
+
+$$ TTC_s = T_R + T^{O}_{BJ} + T^{O}_{RE} + T^{O}_{K}$$
+
+Application kernel overhead can occur for example if the kernel supports 
+thread-level parallelism but doesn't scale linearly with the number of 
+threads. Overhead in ASyncRE captures the time  
 
 \subsection{Systems Investigated} 
 
