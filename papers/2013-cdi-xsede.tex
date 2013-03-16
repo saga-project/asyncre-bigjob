@@ -898,7 +898,7 @@ modes intended to probe various scaling aspects of ASyncRE and BigJob. All runs
 were given a wall time of one hour (with appropriate extrapolations). The three
 modes were as follows:
 \begin{enumerate}[I]
-\item (IMPACT systems 1-2, MM) \brnote{Left for Melissa}
+\item (IMPACT systems 1-2, MM) Fixed Pilot size, fixed Pilot runtime, and varying number of replicas in proportion to the number of cores per replica
 \item (AMBER system 1, MM-US) Fixed Pilot size and approximately fixed cycle
   length (in CPU time) while varying the number of concurrent jobs ({\em i.e.}
   the number of cores per job) and the simulation time of each cycle. 
@@ -910,6 +910,8 @@ modes were as follows:
 %time waiting in queue. we do not measure $T_W$. We  
 
 \subsection{Results}
+
+The IMPACT system 1 is a small system, which was not anticipated to scale well beyond four cores. The data in \ref{fig:} shows what happens for fixed Pilot-Job size of 384 cores and varying number of cores per replica. The number of replicas was increased from 64 through 768. 768 replicas corresponds to the maximum capacity of the Pilot-Job (half run at one time). This experiment shows the limitations of the scaling of IMPACT. Parallelization overheads prevent us from obtaining the ideal case. For example, if the number of replicas were not varied, with 2 cores per replica, we would have completed 945 ns in 12.9 hours rather than 24. This small system has a substantial overhead with more than 6 cores, most likely related to the fact that with more than 6 cores we are going off-chip. 
 
 
 \section{Discussion}
