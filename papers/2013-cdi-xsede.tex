@@ -913,7 +913,19 @@ modes were as follows:
 
 \subsection{Results}
 
-The IMPACT system 1 is a small system, which was not anticipated to scale well beyond four cores. The data in \ref{fig:} shows what happens for fixed Pilot-Job size of 384 cores and varying number of cores per replica. The number of replicas was increased from 64 through 768. 768 replicas corresponds to the maximum capacity of the Pilot-Job (half run at one time). This experiment shows the limitations of the scaling of IMPACT. Parallelization overheads prevent us from obtaining the ideal case. For example, if the number of replicas were not varied, with 2 cores per replica, we would have completed 945 ns in 12.9 hours rather than 24. This small system has a substantial overhead with more than 6 cores, most likely related to the fact that with more than 6 cores we are going off-chip. 
+The IMPACT system 1 is a small system, which was not anticipated to scale well beyond four cores. The data in \ref{fig:impact_cy8} shows what happens for fixed Pilot-Job size of 384 cores and varying number of cores per replica. The number of replicas was increased from 64 through 768. 768 replicas corresponds to the maximum capacity of the Pilot-Job (half run at one time). This experiment shows the limitations of the scaling of IMPACT. Parallelization overheads prevent us from obtaining the ideal case. For example, if the number of replicas were not varied, with 2 cores per replica, we would have completed 945 ns in 12.9 hours rather than 24. This small system has a substantial overhead with more than 6 cores, most likely related to the fact that with more than 6 cores we are going off-chip. 
+
+\begin{figure}[t]
+    % \begin{subfigure}[b]{0.5\textwidth}
+	\centering
+		\includegraphics[width=0.5\textwidth]{impact_data/impact_cy8.pdf}
+	\caption{\textbf{IMPACT Small System for a Fixed BJ Size As the number of replicas  
+                      increases, the number of nanoseconds/day acheived increases. This shows the inefficiency of IMPACT in parallelizability after 6 cores.}}
+	\label{fig:impact_cy8}
+   % \end{subfigure}
+   %    \begin{subfigure}[b]{0.5\textwidth}
+   	% \end{subfigure}
+\end{figure}
 
 
 \section{Discussion}
