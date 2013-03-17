@@ -935,15 +935,15 @@ CPU cores required to run all of the replicas at once). With 1 core
 per replica and 768 replicas the measured throughput is 954 ns/day to
 be compared with the nominal maximal throughput of $1,300$ ns/day
 corresponding to uninterrupted MD at the measured MD CPU speed (4.2
-minutes for 10ps per replica). The ratio of the observed trhoughput
+minutes for 10ps per replica). The ratio of the observed throughput
 over the maximum (73\%) measures the overhead imposed by replica
 exchange coordination ($T^{O}_{BJ} + T^{O}_{RE}$ above).  We see that
-the throughtput (expressed in simulation time per day) is reduced from
+the throughput (expressed in simulation time per day) is reduced from
 945 ns/day with 768 replicas to 708 ns/day with 192 replicas. The
 reduction is due in large part to parallelization overheads in going
-from 1 core per replica. As it can be deduced from the time required
+from 1 core per replica, as it can be deduced from the time required
 to complete one MD cycle (10,000 MD steps in this case). The parallel
-efficiency is approximately 76 and 67\% with 2 and 4 replicas,
+efficiency is approximately 76 and 67\% with 2 and 4 cores,
 respectively, which is reasonable for this very small chemical
 system. The replica exchange coordination overhead remains
 approximately constant; for the test with 192 replicas for example the
@@ -969,15 +969,16 @@ Number of Replicas & Cores/replica & time/cycle (min) & Throughput (ns/day) \\ \
 \begin{figure}
 \includegraphics[width=3in]{impact_data/impact_trpcage.eps}
 \caption{
-  Scaling results for ASyncRE/BigJob with the IMPACT MD engine using TrpCage protein folding. Each run consisted of 504 cores divided amongst differing numbers of replicas. Despite the scaling limitations of IMPACT, we are able to acheive approx. 2.8ms per day.
+  Scaling results for ASyncRE/BigJob for the folding of the TrpCage protein. Each run consisted of 504 cores divided amongst differing numbers of replicas. The maximum throughput is obtained 3.5$\mu$s/day with the largest number of replicas.
   \label{fig:impact_medium}
 }
 \end{figure}
 
-The medium IMPACT system \ref{fig:impact_medium} shows that we acheive approximately 3.4 microseconds of data per day (when scaled from the performance over 1 hour) with 1008 replicas running on 1 core each. We already determined from the small system that IMPACT does not parallelize well. As a result, the best way to divide replicas given N cores is that each replica should be given 1 node. For a different application kernel or physical model, an optimal configuration might have included more cores per replica. Irrespective of the configuration differences, we are still able to acheive 1008 replicas in one run, with 504 running at one time (concurrently). We measured the wall clock time required to do 25,000 steps as the number of cores per replica increased. As expected, the time it took for a replica to complete 25,000 steps for 1 core was significantly higher than for 12 cores (i.e. 343 seconds as opposed to 59 seconds).
+The ASyncRE results for the folding of the TrpCage miniprotein (Fig. \ref{fig:impact_medium})  confirm the general trends observed for the smaller host-guest system above. For this case IMPACT's parallel efficiency is more favorable due to the greater number of atoms. It has been possible to test with the maximum number of cores per replica (12) allowed by the hardware. As expected maximum throughput (3.5$\mu$s/day) is obtained with serial replica execution with the largest number of replicas (1008). The maximum throughput in this case is 4.7 $\mu$s/day yielding a replica exchange overhead of 75\% similar to the host-guest system above. With the largest core count the throughput is 2.8 $\mu$s/day, lower than the observed maximum, but yielding a 6-fold speed up in terms of single-replica MD throughput. 
 
 \input{resultsBKR}
 
+\egnote{
 \section{Discussion}
 
 \jhanote{Overall Productivity is Scientific efficiency vs. Computing  efficiency!}
@@ -1000,6 +1001,8 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 \subsubsection{Different Exchange Modes}
 
 \subsection{Conclusion}
+
+}
 
 \section*{Acknowledgement} {\footnotesize This work is funded by an
   NSF Cyber-enabled Discovery and Innovation Award (CHE-1125332), and
