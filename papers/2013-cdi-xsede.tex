@@ -52,12 +52,17 @@
 \numberofauthors{5} 
 \author{
 \alignauthor
-Brian K. Radak \\
+Melissa Romanus, Ole Weidner, Shantenu Jha \\
+       \affaddr{Electrical and Computer Engineering, Rutgers University}\\
+       \affaddr{Piscataway, NJ 08854}\\
+       \email{shantenu.jha@rutgers.edu}
+\alignauthor
+Brian K. Radak,  Emilio Gallicchio, {Tai-Sung} Lee, Darrin M. York, Peng He, {Nan-Jie} Deng, Dai Wei, Ronald M. Levy\\
        \affaddr{BioMaPS Institute for Quantitative Biology and Department of Chemistry and Chemical Biology, Rutgers University}\\
        \affaddr{Piscataway, NJ 08854}\\
-       \affaddr{Department of Chemistry, University of Minnesota}\\
-       \affaddr{Minneapolis, MN 55455}\\
-      \email{radakb@biomaps.rutgers.edu}
+       \email{emilio@biomaps.rutgers.edu,\\york@biomaps.rutgers.edu,\\ronlevy@lutece.rutgers.edu}
+}
+\egnote{
 \alignauthor
 Melissa Romanus\\
        \affaddr{Electrical and Computer Engineering}\\
@@ -921,44 +926,62 @@ modes were as follows:
 %$T_c = T_x + T_Q$ where terms are total time to completion, run time,
 %time waiting in queue. we do not measure $T_W$. We  
 
+
 \subsection{Results}
 
-The IMPACT system 1 is a small system, which was not anticipated to
-scale well beyond four cores. The data in \ref{table:impactSmall} shows
-what happens for a fixed Pilot-Job size of 384 cores and varying number
-of cores per replica. The number of replicas was increased from 192 to 768. 
-768 replicas corresponds to the maximum capacity of the
-Pilot-Job (half run at one time). This experiment shows the
-limitations of the scaling of IMPACT. Parallelization overheads
-prevent us from obtaining the ideal case. For example, if the number
-of replicas were not varied, with 2 cores per replica, we would have
-completed 945 ns in 12.9 hours rather than 24. This small system has a
-substantial overhead with more than 6 cores, most likely related to
-the fact that with more than 6 cores we are going off-chip. We measured the wall clock time required to do 10,000 steps as the number of cores per replica increased. As expected, the time it took for a replica to complete 10,000 steps for 1 core was significantly higher than for 4 cores (i.e. 4.23 minutes as opposed to 1.45 minutes). Despite the scaling differences in IMPACT, we are able to complete 768 replicas running asynchronously over long periods of time. For the 768, 1 core per subjob system, each replica is able to complete from 5-7 cycles individually (where a cycle constitutes 10,000 steps). For the system with 4 cores per replica, each replica is able to complete anywhere from 14 to 19 cycles. Overall, we are able to acheive a maximum of about 945 ns/day.
+ Table \ref{table:impactSmall} reports the main results for the
+cyclooctanol/$\beta$-cyclodextrin system. In this test the number of
+replicas was varied from 768 to 192 by increasing the level of
+parallelism of the IMPACT MD kernel (from 1 core per replica to 4),
+while the size of the BigJob was kept fixed at 384 cores (half of the
+CPU cores required to run all of the replicas at once). With 1 core
+per replica and 768 replicas the measured throughput is 954 ns/day to
+be compared with the nominal maximal throughput of $1,300$ ns/day
+corresponding to uninterrupted MD at the measured MD CPU speed (4.2
+minutes for 10ps per replica). The ratio of the observed throughput
+over the maximum (73\%) measures the overhead imposed by replica
+exchange coordination ($T^{O}_{BJ} + T^{O}_{RE}$ above).  We see that
+the throughput (expressed in simulation time per day) is reduced from
+945 ns/day with 768 replicas to 708 ns/day with 192 replicas. The
+reduction is due in large part to parallelization overheads in going
+from 1 core per replica, as it can be deduced from the time required
+to complete one MD cycle (10,000 MD steps in this case). The parallel
+efficiency is approximately 76 and 67\% with 2 and 4 cores,
+respectively, which is reasonable for this very small chemical
+system. The replica exchange coordination overhead remains
+approximately constant; for the test with 192 replicas for example the
+throughput is 76\% of the maximum similar to the 73\% measured with
+768 replicas. This indicates that the ASyncRE+BigJob is capable of
+handling this rather high replicas turn over (up to $4,000$ subjob
+launches per hour) quite efficiently.
 
-\begin{table}\label{table:impactSmall}
-\caption{IMPACT I Small System, 384 Core BigJob, \\60 minute run time}
-\begin{tabular}{| p{2cm} | p{2cm} | p{2cm} |}
+
+
+
+\begin{table}
+\caption{\label{table:impactSmall}IMPACT I Small System, 384 Core BigJob, \\60 minute run time}
+\begin{tabular}{| p{1.5cm} | p{1.7cm} | p{1.7cm} | p{1.7cm}|}
 \hline
-Number of Replicas & Subjob Cores Per Replica &  ns/day \\ \hline
-768 & 1 & 945.36 \\ \hline
-384 & 2 & 880.56 \\ \hline
-192 & 4 & 708.24 \\ \hline
+Number of Replicas & Cores/replica & time/cycle (min) & Throughput (ns/day) \\ \hline
+768 & 1 & 4.2 & 945 \\ \hline
+384 & 2 & 2.6 & 880 \\ \hline
+192 & 4 & 1.5 & 708 \\ \hline
 \end{tabular}
 \end{table}
 
 \begin{figure}
 \includegraphics[width=3in]{impact_data/impact_trpcage.eps}
 \caption{
-  Scaling results for ASyncRE/BigJob with the IMPACT MD engine using TrpCage protein folding. Each run consisted of 504 cores divided amongst differing numbers of replicas. Despite the scaling limitations of IMPACT, we are able to acheive approx. 2.8ms per day.
+  Scaling results for ASyncRE/BigJob for the folding of the TrpCage protein. Each run consisted of 504 cores divided amongst differing numbers of replicas. The maximum throughput is obtained 3.5$\mu$s/day with the largest number of replicas.
   \label{fig:impact_medium}
 }
 \end{figure}
 
-The medium IMPACT system \ref{fig:impact_medium} shows that we acheive approximately 3.4 microseconds of data per day (when scaled from the performance over 1 hour) with 1008 replicas running on 1 core each. We already determined from the small system that IMPACT does not parallelize well. As a result, the best way to divide replicas given N cores is that each replica should be given 1 node. For a different application kernel or physical model, an optimal configuration might have included more cores per replica. Irrespective of the configuration differences, we are still able to acheive 1008 replicas in one run, with 504 running at one time (concurrently). We measured the wall clock time required to do 25,000 steps as the number of cores per replica increased. As expected, the time it took for a replica to complete 25,000 steps for 1 core was significantly higher than for 12 cores (i.e. 343 seconds as opposed to 59 seconds).
+The ASyncRE results for the folding of the TrpCage miniprotein (Fig. \ref{fig:impact_medium})  confirm the general trends observed for the smaller host-guest system above. For this case IMPACT's parallel efficiency is more favorable due to the greater number of atoms. It has been possible to test with the maximum number of cores per replica (12) allowed by the hardware. As expected maximum throughput (3.5$\mu$s/day) is obtained with serial replica execution with the largest number of replicas (1008). The maximum throughput in this case is 4.7 $\mu$s/day yielding a replica exchange overhead of 75\% similar to the host-guest system above. With the largest core count the throughput is 2.8 $\mu$s/day, lower than the observed maximum, but yielding a 6-fold speed up in terms of single-replica MD throughput. 
 
 \input{resultsBKR}
 
+\egnote{
 \section{Discussion}
 
 \jhanote{Overall Productivity is Scientific efficiency vs. Computing  efficiency!}
@@ -982,6 +1005,8 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 
 \subsection{Conclusion}
 
+}
+
 \section*{Acknowledgement} {\footnotesize This work is funded by an
   NSF Cyber-enabled Discovery and Innovation Award (CHE-1125332), and
   NSF-ExTENCI (OCI-1007115). This work has also been made possible
@@ -997,6 +1022,7 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 \bibliographystyle{abbrv}
 %\bibliography{saga,saga-old,literature,replica-exchange}
 %\bibliography{saga2,literature,replica-exchange}
-\bibliography{MDreferences,radical_rutgers,egallicc}
+\bibliography{MDreferences,egallicc}
+%radical_rutgers
 
 \end{document}
