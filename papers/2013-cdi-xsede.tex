@@ -954,6 +954,8 @@ Number of Replicas & Subjob Cores Per Replica &  Wall Time (s) for 10K Steps \\ 
 }
 \end{figure}
 
+The medium IMPACT system \ref{fig:impact_medium} shows that we acheive approximately 3.4 microseconds of data per day (when scaled from the performance over 1 hour) with 1008 replicas running on 1 core each. We already determined from the small system that IMPACT does not parallelize well. As a result, the best way to divide replicas given N cores is that each replica should be given 1 node. For a different application kernel or physical model, an optimal configuration might have included more cores per replica. Irrespective of the configuration differences, we are still able to acheive 1008 replicas in one run, with 504 running at one time (concurrently). We measured the wall clock time required to do 25,000 steps as the number of cores per replica increased. As expected, the time it took for a replica to complete 25,000 steps for 1 core was significantly higher than for 12 cores (i.e. 343 seconds as opposed to 59 seconds).
+
 \input{resultsBKR}
 
 \section{Discussion}
