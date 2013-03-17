@@ -926,28 +926,43 @@ modes were as follows:
 
 \subsection{Results}
 
-The IMPACT system 1 is a small system, which was not anticipated to
-scale well beyond four cores. The data in \ref{table:impactSmall} shows
-what happens for a fixed Pilot-Job size of 384 cores and varying number
-of cores per replica. The number of replicas was increased from 192 to 768. 
-768 replicas corresponds to the maximum capacity of the
-Pilot-Job (half run at one time). This experiment shows the
-limitations of the scaling of IMPACT. Parallelization overheads
-prevent us from obtaining the ideal case. For example, if the number
-of replicas were not varied, with 2 cores per replica, we would have
-completed 945 ns in 12.9 hours rather than 24. This small system has a
-substantial overhead with more than 6 cores, most likely related to
-the fact that with more than 6 cores we are going off-chip. We measured the wall clock time required to do 10,000 steps as the number of cores per replica increased. As expected, the time it took for a replica to complete 10,000 steps for 1 core was significantly higher than for 4 cores (i.e. 4.23 minutes as opposed to 1.45 minutes). Despite the scaling differences in IMPACT, we are able to complete 768 replicas running asynchronously over long periods of time. For the 768, 1 core per subjob system, each replica is able to complete from 5-7 cycles individually (where a cycle constitutes 10,000 steps). For the system with 4 cores per replica, each replica is able to complete anywhere from 14 to 19 cycles. Overall, we are able to acheive a maximum of about 945 ns/day.
+ Table \ref{table:impactSmall} reports the main results for the
+cyclooctanol/$\beta$-cyclodextrin system. In this test the number of
+replicas was varied from 768 to 192 by increasing the level of
+parallelism of the IMPACT MD kernel (from 1 core per replica to 4),
+while the size of the BigJob was kept fixed at 384 cores (half of the
+CPU cores required to run all of the replicas at once). With 1 core
+per replica and 768 replicas the measured throughput is 954 ns/day to
+be compared with the nominal maximal throughput of $1,300$ ns/day
+corresponding to uninterrupted MD at the measured MD CPU speed (4.2
+minutes for 10ps per replica). The ratio of the observed trhoughput
+over the maximum (73\%) measures the overhead imposed by replica
+exchange coordination ($T^{O}_{BJ} + T^{O}_{RE}$ above).  We see that
+the throughtput (expressed in simulation time per day) is reduced from
+945 ns/day with 768 replicas to 708 ns/day with 192 replicas. The
+reduction is due in large part to parallelization overheads in going
+from 1 core per replica. As it can be deduced from the time required
+to complete one MD cycle (10,000 MD steps in this case). The parallel
+efficiency is approximately 76 and 67\% with 2 and 4 replicas,
+respectively, which is reasonable for this very small chemical
+system. The replica exchange coordination overhead remains
+approximately constant; for the test with 192 replicas for example the
+throughput is 76\% of the maximum similar to the 73\% measured with
+768 replicas. This indicates that the ASyncRE+BigJob is capable of
+handling this rather high replicas turn over (up to $4,000$ subjob
+launches per hour) quite efficiently.
+
+
+
 
 \begin{table}
-\label{table:impactSmall}
-\caption{IMPACT I Small System, 384 Core BigJob, \\60 minute run time}
-\begin{tabular}{| p{2cm} | p{2cm} | p{2cm} |}
+\caption{\label{table:impactSmall}IMPACT I Small System, 384 Core BigJob, \\60 minute run time}
+\begin{tabular}{| p{1.5cm} | p{1.7cm} | p{1.7cm} | p{1.7cm}|}
 \hline
-Number of Replicas & Subjob Cores Per Replica &  Wall Time (s) for 10K Steps \\ \hline
-768 & 1 & 4.23 \\ \hline
-384 & 2 & 2.63 \\ \hline
-192 & 4 & 1.45 \\ \hline
+Number of Replicas & Cores/replica & time/cycle (min) & Throughput (ns/day) \\ \hline
+768 & 1 & 4.2 & 945 \\ \hline
+384 & 2 & 2.6 & 880 \\ \hline
+192 & 4 & 1.5 & 708 \\ \hline
 \end{tabular}
 \end{table}
 
@@ -989,6 +1004,7 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 \bibliographystyle{abbrv}
 %\bibliography{saga,saga-old,literature,replica-exchange}
 %\bibliography{saga2,literature,replica-exchange}
-\bibliography{MDreferences,radical_rutgers,egallicc}
+\bibliography{MDreferences,egallicc}
+%radical_rutgers
 
 \end{document}
