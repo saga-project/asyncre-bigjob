@@ -488,8 +488,8 @@ need to be submitted which would otherwise saturate the queuing
 system, and (iv) as a basis to implement application specific
 execution, scheduling and policy decisions
 
-The P* model~\cite{pstar12}, a model for Pilot-Abstractions, worked to
-clearly define the computation and data components of a distributed
+The P* model~\cite{pstar12}, a model for Pilot-Abstractions, worked to clearly
+define the computation and data components of a distributed
 application as 'compute units' and 'data units' in the context of
 Pilot-Jobs and Pilot-Data. A compute unit describes a self-containing
 piece of work, e.g. a computational task that potentially operates on
@@ -524,8 +524,8 @@ resources.
 BigJob has seen its widest usage across the heterogeneous resources
 that XSEDE provides. Simple installation into user space on any
 resource that supports Python 2.5 or greater makes the uptake of
-BigJob easy for the end user. BigJob supports thousand of jobs and
-millions of SUs on XSEDE and has been at the heart of two recent and
+BigJob easy for the end user. BigJob supports thousands of jobs and
+millions of SUs on XSEDE. It has been at the heart of two recent and
 successful ECSS projects.
 
 % BigJob has historically been used for parameter sweeps, many instances
@@ -536,7 +536,7 @@ successful ECSS projects.
 
 In order for BigJob to work on heterogeneous resources, it requires an
 interoperability layer which provides access to a variety of
-middleware.  This is acheived through the use of The Simple API for Grid Applications (SAGA).
+middleware.  This is achieved through the use of The Simple API for Grid Applications (SAGA).
 SAGA defines a 
 high-level access mechanism for distributed infrastructure components 
 like job schedulers, file transfers, and resource provisioning services. 
@@ -554,26 +554,26 @@ is that users do not need to worry about the individual batch
 queueing systems implemented on the various machines. Using the 
 SAGA API and appropriate job adaptors, the different submission
 mechanisms for these queueing systems is handled on the SAGA backend,
-which is transpart to the user.
+which is transparent to the user.
 
 The SAGA API has been used to provide almost complete
 coverage over nearly all grid and distributed computing
 middleware/systems, including but not limited to Condor, Genesis,
 Globus, UNICORE, SGE, LSF/PBS/Torque, and Amazon EC2.
 
-\subsection{Using BigJob on XSEDE}
+\subsection{Deployment of BigJob}
 
-SAGA and BigJob are lightweight that they can be easily installed into
+SAGA and BigJob are lightweight enough that they can be easily installed into
 the home directory of a user using the Python Package Index
 (PyPi). SAGA is packaged within BigJob, so users do not have to worry
-about installing two seperate modules.
+about installing two separate modules.
 
 Since the main deployment is on XSEDE, we do not recommend altering
 the default PYTHONPATH of the machines. Instead, we encourage users to
 use a virtual environment. A virtual environment allows a user to
 create a local Python software repository in his or her home directory
 that behaves exactly like the global Python repository, except that it
-grants the user \textit{write} access to it. In order to use virtual
+grants the user \textit{write} access to it. In order to use the virtual
 environment, the Python version must be greater than 2.4. Since some
 XSEDE machines use Python 2.4 as the default python version, it may be
 required to load a python module file before installing BigJob.
@@ -585,10 +585,11 @@ can be installed by typing:
 easy_install bigjob
 \end{lstlisting}
 
-In addition to the BigJob package, it installs BigJob python
-dependencies, including the SAGA package. The SAGA package includes
+In addition to the BigJob package, the BigJob python
+dependencies, including the SAGA package, are also installed. 
+The SAGA package includes
 the proper adaptors for a wide variety of middleware systems. This
-allows the user to submit jobs to almost any of the XSEDE batch
+allows the user to submit jobs to any of the XSEDE batch
 queuing systems.
 
 BigJob requires SSH password-less login to the machines and a redis
@@ -596,8 +597,8 @@ server running either locally or on a remote server. The redis server
 is used for coordination of the pilot-job and its compute and data
 units. For the purposes of this project, we utilize a private redis
 server hosted on a virtual machine at Indiana University. In order to
-provide a more seemless uptake of BigJob by users, we will provide an
-open-acess redis server available on XSEDE. This avoids the overhead
+provide a more seamless uptake of BigJob by users, we will provide an
+open-access redis server available on XSEDE. This avoids the overhead
 of new users having to start a redis-server on an XSEDE machine's head
 node or on their local machines. This effort is currently underway
 with XSEDE ECSS staff to make the server only accessible to registered
@@ -704,7 +705,7 @@ pip install async_re-0.1.0.tar.gz
 
 \verb+numpy+ and \verb+configobj+ are currently required dependencies
 that will be installed automatically after the ASyncRE software will
-be integrated into the PyPi archive. \verb+async_re-0.1.0.tar.gz+ is
+be integrated into the PyPi archive. \\ \verb+async_re-0.1.0.tar.gz+ is
 the current Python distribution package for ASyncRE. The library will
 be soon made available publicly through \verb+github+.
 
@@ -718,7 +719,7 @@ tar zxvf async_re-0.1.0.tar.gz
 \end{lstlisting}
 
 Current application-level class files (such as
-\verb+amberus_async_re.py+ behave as executable scripts when launched
+\\ \verb+amberus_async_re.py+ behave as executable scripts when launched
 directly (see below). Documentation files can be found in the
 \verb+doc+ subdirectory and sample files in the \verb+examples+
 subdirectory of the package directory.
@@ -923,6 +924,7 @@ modes were as follows:
 
 %$T_c = T_x + T_Q$ where terms are total time to completion, run time,
 %time waiting in queue. we do not measure $T_W$. We  
+
 
 \subsection{Results}
 
