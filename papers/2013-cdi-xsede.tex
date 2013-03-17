@@ -927,29 +927,29 @@ modes were as follows:
 \subsection{Results}
 
 The IMPACT system 1 is a small system, which was not anticipated to
-scale well beyond four cores. The data in \ref{fig:impact_cy8} shows
-what happens for fixed Pilot-Job size of 384 cores and varying number
-of cores per replica. The number of replicas was increased from 64
-through 768. 768 replicas corresponds to the maximum capacity of the
+scale well beyond four cores. The data in \ref{table:impactSmall} shows
+what happens for a fixed Pilot-Job size of 384 cores and varying number
+of cores per replica. The number of replicas was increased from 192 to 768. 
+768 replicas corresponds to the maximum capacity of the
 Pilot-Job (half run at one time). This experiment shows the
 limitations of the scaling of IMPACT. Parallelization overheads
 prevent us from obtaining the ideal case. For example, if the number
 of replicas were not varied, with 2 cores per replica, we would have
 completed 945 ns in 12.9 hours rather than 24. This small system has a
 substantial overhead with more than 6 cores, most likely related to
-the fact that with more than 6 cores we are going off-chip.
+the fact that with more than 6 cores we are going off-chip. We measured the wall clock time required to do 10,000 steps as the number of cores per replica increased. As expected, the time it took for a replica to complete 10,000 steps for 1 core was significantly higher than for 4 cores (i.e. 4.23 minutes as opposed to 1.45 minutes). Despite the scaling differences in IMPACT, we are able to complete 768 replicas running asynchronously over long periods of time. For the 768, 1 core per subjob system, each replica is able to complete from 5-7 cycles individually (where a cycle constitutes 10,000 steps). For the system with 4 cores per replica, each replica is able to complete anywhere from 14 to 19 cycles. Overall, we are able to acheive a maximum of about 945 ns/day.
 
-\begin{figure}[t]
-    % \begin{subfigure}[b]{0.5\textwidth}
-	\centering
-		\includegraphics[width=0.5\textwidth]{impact_data/impact_cy8.eps}
-	\caption{\textbf{IMPACT Small System for a Fixed BJ Size As the number of replicas  
-                      increases, the number of nanoseconds/day acheived increases. This shows the inefficiency of IMPACT in parallelizability after 6 cores.}}
-	\label{fig:impact_cy8}
-   % \end{subfigure}
-   %    \begin{subfigure}[b]{0.5\textwidth}
-   	% \end{subfigure}
-\end{figure}
+\begin{table}
+\label{table:impactSmall}
+\caption{IMPACT I Small System, 384 Core BigJob, \\60 minute run time}
+\begin{tabular}{| p{2cm} | p{2cm} | p{2cm} |}
+\hline
+Number of Replicas & Subjob Cores Per Replica &  Wall Time (s) for 10K Steps \\ \hline
+768 & 1 & 4.23 \\ \hline
+384 & 2 & 2.63 \\ \hline
+192 & 4 & 1.45 \\ \hline
+\end{tabular}
+\end{table}
 
 \input{resultsBKR}
 
