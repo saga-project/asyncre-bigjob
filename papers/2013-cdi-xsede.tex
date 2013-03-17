@@ -946,6 +946,14 @@ Number of Replicas & Subjob Cores Per Replica &  Wall Time (s) for 10K Steps \\ 
 \end{tabular}
 \end{table}
 
+\begin{figure}
+\includegraphics[width=3in]{impact_data/impact_trpcage.eps}
+\caption{
+  Scaling results for ASyncRE/BigJob with the IMPACT MD engine using TrpCage protein folding. Each run consisted of 504 cores divided amongst differing numbers of replicas. Despite the scaling limitations of IMPACT, we are able to acheive approx. 2.8ms per day.
+  \label{fig:impact_medium}
+}
+\end{figure}
+
 \input{resultsBKR}
 
 \section{Discussion}
