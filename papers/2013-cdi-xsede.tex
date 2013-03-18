@@ -1007,6 +1007,23 @@ rebooted, started speeding up.  Experience --> Old to New Aspects
 
 }
 
+\section{Discussion}
+
+This paper demonstrates the ability to run replica-exchange
+simulations for both classical MM (IMPACT and AMBER) and QM/MM kernels
+with thousands of replicas using a single general purpose
+framework. The work in this paper represents how algorithmic advances
+coupled with infrastructural advances enable scientific simulations at
+very-large scales. We measure the impact of large-scales using the
+number of nanoseconds simulated per day, which even accounting for the
+relatively small system sizes, is still impressive and arguably
+unprecedented. In order to successfully manage large number of
+replicas, the framework requires the need for dynamic execution and
+advanced resource management, for which we use BigJob - a flexible and
+scalable Pilot-job as the underlying capability. We have developed the
+framework into a general-purpose library and have made is publically
+available for other users of replica-exchange on XSEDE resources.
+
 \section*{Acknowledgement} {\footnotesize This work is funded by an
   NSF Cyber-enabled Discovery and Innovation Award (CHE-1125332), and
   NSF-ExTENCI (OCI-1007115). This work has also been made possible
