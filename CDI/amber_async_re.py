@@ -151,16 +151,16 @@ class pj_amber_job(async_re_job):
         inpcrd = '%s_%d.rst7'%(self.basename,cyc-1)
         mdout  = '%s_%d.out'%(self.basename,cyc)
         mdcrd  = '%s_%d.nc'%(self.basename,cyc)
-        rstrt  = '%s_%d.rst7'%(self.basename,cyc)
+        restrt = '%s_%d.rst7'%(self.basename,cyc)
         stdout = '%s_%d.log'%(self.basename,cyc)
         stderr = '%s_%d.err'%(self.basename,cyc)
 
-        args = ['-O','-c',inpcrd,'-o',mdout,'-x',mdcrd,'-r',rstrt]
+        args = ['-O','-c',inpcrd,'-o',mdout,'-x',mdcrd,'-r',restrt]
 
-        #pilotjob: Compute Unit (i.e. Job) description
+        # Compute Unit (i.e. Job) description
         cpt_unit_desc = {
             "executable": self.exe,
-            "environment": [], # ['AMBERHOME=%s'%AMBERHOME],
+            "environment": ['AMBERHOME=%s'%AMBERHOME],
             "arguments": args,
             "output": stdout,
             "error": stderr,   

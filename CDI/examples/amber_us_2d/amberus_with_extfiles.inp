@@ -1,3 +1,4 @@
+#-Main settings----------------------------------------------------------------
 ENGINE = 'AMBER'
 RE_TYPE = 'AMBERUS'
 RE_SETUP = 'yes'
@@ -5,13 +6,16 @@ ENGINE_INPUT_BASENAME = 'DMP_US'
 ENGINE_INPUT_EXTFILES = 'DMP_US_0.rst7'
 NREPLICAS = 6
 AMBER_RESTRAINT_TEMPLATE = 'AMBER_RST_TEMPLATE'
+VERBOSE = 'yes'
+#-RE/simulation settings-------------------------------------------------------
 FORCE_CONSTANTS = '20.0,20.0:20.0,20.0:20.0,20.0:20.0,20.0:20.0,20.0:20.0,20.0'
 BIAS_POSITIONS = '270.,270.:280.,270.:270.,280.:280.,280.:290.,280.:280.,290.'
-WALL_TIME=5
-COORDINATION_URL="redis://localhost"
-RESOURCE_URL="pbs://radakb@chardonnay.rutgers.edu"
-QUEUE="batch"
-BJ_WORKING_DIR='/home/radakb/devel/git/collaboration/CDI/examples/amber_us_2d/agent'
-TOTAL_CORES=1
-SUBJOB_CORES=1
-VERBOSE="yes"
+#-BigJob settings--------------------------------------------------------------
+WALL_TIME = 15
+COORDINATION_URL = 'redis://localhost'
+RESOURCE_URL = 'pbs://radakb@chardonnay.rutgers.edu'
+QUEUE = 'batch'
+BJ_WORKING_DIR = '/home/radakb/devel/git/collaboration/CDI/examples/amber_us_2d/agent'
+TOTAL_CORES = 2
+SUBJOB_CORES = 1
+#------------------------------------------------------------------------------

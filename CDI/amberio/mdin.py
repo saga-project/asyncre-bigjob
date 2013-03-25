@@ -10,9 +10,11 @@ AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
 REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
             MMPBSA.py source code: ambermd.org/AmberTools-get.html
 """
-__all__ = ['ReadAmberMdinFile','AmberMdin']
+import sys
 
 from namelist import *
+
+__all__ = ['ReadAmberMdinFile','AmberMdin']
 
 def ReadAmberMdinFile(mdin_name, engine='sander'):
     """Read an AMBER mdin file and return an AmberMdin object.
@@ -160,7 +162,6 @@ class AmberMdin(object):
         Write a new mdin file with the current namelist information. For 
         clarity, any values that are set to the default will be omitted.
         """
-        import sys
         if hasattr(outfile,'write'):
             pass
         elif isinstance(outfile,str):
@@ -200,7 +201,7 @@ class AmberNamelist(Namelist):
     very large namelists, only the variable keys that differ from the defaults 
     can also be returned.
     """
-    def __init__(self,name,*args,**kwargs):
+    def __init__(self, name, *args, **kwargs):
         engine = 'sander'
         if kwargs.has_key('engine'): engine = kwargs.pop('engine')
         super(AmberNamelist,self).__init__(name,*args,**kwargs)
@@ -213,14 +214,14 @@ class AmberNamelist(Namelist):
         line = '  '
         for key in self.GetNonDefaults():
             toAdd = '%s=%s, '%(key,self[key])
-            # add to the line until it exceeds the max character count
+            # Add to the line until it exceeds the max character count.
             if len(line + toAdd) <= max_chars_per_line:
                 line += toAdd
             else:
                 sprint += line + '\n'
                 line = '  ' + toAdd
-        # print remainder, hack to to strip off extra space and comma
-        sprint += line[:-2] + '\n /\n'
+        # Print the remainder, strip off the extra comma and space.
+        sprint += '%s \n /\n'%line.strip(', ')
         return sprint
     
     def GetNonDefaults(self):
@@ -228,10 +229,7 @@ class AmberNamelist(Namelist):
         """
         non_defaults = []
         for key,value in self.iteritems():
-            if self.defaults.has_key(key):
-                if value != self.defaults[key]:
-                    non_defaults.append(key)
-            else:
+            if self.defaults.has_key(key) and value != self.defaults[key]:
                 non_defaults.append(key)
         return non_defaults
 
@@ -431,7 +429,8 @@ class AmberNamelist(Namelist):
             raise ValueError('Unrecognized AMBER mdin namelist: %s'%self.name)
 
 if __name__ == '__main__':
-    import sys,os
+    import sys
+    import os
     print '=== AmberMdin Test Suite ==='
     clean = False
     if len(sys.argv) < 2:

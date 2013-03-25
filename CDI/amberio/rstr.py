@@ -381,7 +381,6 @@ class NmroptRestraint(object):
         x - either Angstroms or radians
         """
         if isinstance(crds,float) or isinstance(crds,int):
-            print 'shortcut!'
             r = float(crds)
             drdx = [ 0. ]
         else:
