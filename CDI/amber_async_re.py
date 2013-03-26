@@ -1,18 +1,21 @@
-import os, sys, random
-from pj_async_re import async_re_job
-import numpy as np
+import os
+import sys
+import random
 import math
 #import copy  # only needed for debug
+
+import numpy as np
+
+from pj_async_re import async_re_job
 from amberio.ambertools import AMBERHOME,KB,rst7
 from amberio.amberrun import ReadAmberGroupfile, AmberRun
 
-__all__ = 'pj_amber_job'
+__all__ = ['pj_amber_job']
 
 class pj_amber_job(async_re_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
-        
         # TODO: Move this to async_re_job?
         self.verbose = False
         if self.keywords.get('VERBOSE') == "yes": self.verbose = True
@@ -30,14 +33,12 @@ class pj_amber_job(async_re_job):
         if supported_amber_engines.has_key(engine):
             engine = supported_amber_engines[engine]
         else:
-            self._exit('Requested ENGINE is not from AMBER (sander or pmemd)')
-
+            self._exit('Requested ENGINE (%s) is either invalid or not '
+                       'currently supported.'%engine)
         if self.spmd == 'mpi' or int(self.keywords.get('SUBJOB_CORES')) > 1:
-            self.spmd = 'mpi'
+            self.spmd = 'mpi' # Always use MPI if SUBJOB_CORES > 1.
             engine += '.MPI'
-        # else just assume that a serial executable is desired
-
-        # Check that this executable exists, etc.
+        # Check that this file exists and is exectuable.
         self.exe = os.path.join(AMBERHOME,'bin',engine)
         if not os.path.exists(self.exe) or not os.access(self.exe,os.X_OK):
             self._exit('Could not find an executable: %s\nExpected it to'
@@ -62,8 +63,7 @@ class pj_amber_job(async_re_job):
                 self._exit('Could not determine the replica count from the'
                            ' input provided (set NREPLICAS directly or provide'
                            ' an AMBER groupfile)')
-                
-            # These are the bare minimum files that can define a state 
+            # These are the bare minimum files that can define a state.
             files = {'mdin' : None, 'prmtop' : None, 'inpcrd' : None}
             # First, try to match against the known extfiles based off of 
             # their file extensions.

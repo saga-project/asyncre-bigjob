@@ -97,11 +97,15 @@ class AmberMdin(object):
                 elif nl['type'] == wt_type:
                     return nl[variable]
         # If there's no match, return the default
-        # NB: wt namelists have no default
+        # NB: wt namelists have no default (return None)
         if wt_type is None:
-            return self.namelists.GetFirstMatch(namelist).defaults[variable]
-        else:
-            return None
+            nl = self.namelists.GetFirstMatch(namelist)
+            if nl is not None:
+                return nl.defaults[variable]
+            else:
+                return None
+        raise ValueError('No such variable %s in namelist %s'
+                         %(variable,namelist))
 
     def SetVariableValue(self, variable, value, namelist, wt_type=None):
         """
@@ -153,6 +157,7 @@ class AmberMdin(object):
         self.SetVariableValue('nmropt',1,'cntrl')
         self.SetVariableValue('DISANG',disang,None)
         self.SetVariableValue('DUMPAVE',dumpave,None)
+        self.SetVariableValue('LISTIN','POUT',None)
         self.SetVariableValue('type',"'DUMPFREQ'",'wt',"'type'")
         self.SetVariableValue('istep1',print_step,'wt',"'DUMPFREQ'")
         self.SetVariableValue('type',"'END'",'wt',"'type'")

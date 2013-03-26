@@ -1,7 +1,12 @@
 import os
 import random, math # Only used in the now deprected _doExchange_pair()
+
 from pj_async_re import async_re_job
 from amber_async_re import pj_amber_job, KB
+
+DISANG_NAME = 'US.RST' # Hardcoded AMBER restraint file name.
+DUMPAVE_EXT = 'TRACE' # Hardcoded file extension for restraint coordinates.
+
 class amberus_async_re_job(pj_amber_job,async_re_job):
 
     def _checkInput(self):
@@ -60,12 +65,10 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
             print 'Using restraint template file: %s'%restraint_template
 
         # Read the restraint template and then modify the restraint objects 
-        # based on the input. For simplicity, hardcode all restraint files to 
-        # have the name US.RST. Each replica will simply overwrite this file at
-        # each cycle.
+        # based on the input. 
         for n,state in enumerate(self.states):
             state.AddRestraints(restraint_template)
-            state.mdin.SetVariableValue('DISANG','US.RST',None)
+            state.mdin.SetVariableValue('DISANG',DISANG_NAME,None)
             state.rstr.SetRestraintParameters(r0=posbias[n],k0=kbias[n])
 
     def _buildInpFile(self, repl):
@@ -81,9 +84,9 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         # 2) Modify the input to print to a new output (trace) file
         title =  (' umbrella sampling restraint for replica %d in state %d'
                   ' during cycle %d'%(repl,sid,cyc))
-        rst_file = 'r%d/US.RST'%repl
+        rst_file = 'r%d/%s'%(repl,DISANG_NAME)
         self.states[sid].rstr.WriteAmberRestraintFile(rst_file,title)
-        trace_file = '%s_%d.TRACE'%(self.basename,cyc)
+        trace_file = '%s_%d.%s'%(self.basename,cyc,DUMPAVE_EXT)
         self.states[sid].mdin.SetVariableValue('DUMPAVE',trace_file,None)
         # NB! This needs to be done last since the mdin file is written by
         # this routine and the mdin object was modified here.
@@ -161,7 +164,7 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         of a given replica.
         """
         cyc = self.status[repl]['cycle_current']
-        trace = 'r%d/%s_%d.TRACE'%(repl,self.basename,cyc)
+        trace = 'r%d/%s_%d.%s'%(repl,self.basename,cyc,DUMPAVE_EXT)
         for line in open(trace,'r'):
             coords = line.strip().split()[1:]
         return [ float(x) for x in coords ]
@@ -172,7 +175,7 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
             return False
         else:
             # Test the added criteria that a trace file was written
-            trace = 'r%d/%s_%d.TRACE'%(repl,self.basename,cyc)
+            trace = 'r%d/%s_%d.%s'%(repl,self.basename,cyc,DUMPAVE_EXT)
             return os.path.exists(trace)
 
 

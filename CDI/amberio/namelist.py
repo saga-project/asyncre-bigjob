@@ -32,7 +32,11 @@ class NamelistCollection(list):
         return (nl for nl in self if nl.name == name)
 
     def GetFirstMatch(self, name):
-        return next(self.GetAllMatches(name))
+        try:
+            return next(self.GetAllMatches(name))
+        except StopIteration:
+            # This happens if GetAllMatches returns an empty generator.
+            return None
 
 class Namelist(dict):
     """

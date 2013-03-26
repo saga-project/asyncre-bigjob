@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+NREPLICAS=12
+
+#
+# The following makes a directory called "inpcrds" and populates it with unique
+# symlinks to a starting structure. Obviously in practice this is only useful
+# if the files are actually different, but it illustrates how this would be 
+# done.
+HERE=$PWD
+GFILE=$HERE/groupfile
+INP=DMP_US.inp
+PRM=DMP_US.parm7
+
+echo "# Note that each replica uses the same mdin and prmtop, but a different inpcrd." > $GFILE
+mkdir -p inpcrds
+cd $HERE/inpcrds
+for((i=0; i<$NREPLICAS; i++)); do
+    CRD=r$i.rst7
+    if [ ! -e $CRD ]; then
+       ln -s $HERE/DMP_US_0.rst7 $CRD
+    fi
+    echo "-O -i $INP -p $PRM -c inpcrds/$CRD" >> $GFILE
+    
+done
+
+cd $HERE
+

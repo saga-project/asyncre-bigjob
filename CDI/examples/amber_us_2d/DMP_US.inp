@@ -5,11 +5,12 @@
   ioutfm = 1,
   ntc=2, ntf=2, tol=1e-08,
   ntt=3, temp0=310.0, gamma_ln=5.0,
-  igb=2, nmropt=1, 
+  igb=2, ! nmropt=1, 
   ig=-1
  /
- &wt type='DUMPFREQ', istep1=500 /
- &wt type='END' /
- DISANG=DMP_US.RST
- DUMPAVE=DMP_US.TRACE
- LISTIN=POUT
+ &wt 
+  type='DUMPFREQ', istep1=500 
+ /
+ &wt 
+  type='END' 
+ /

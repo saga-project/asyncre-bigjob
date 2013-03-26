@@ -7,6 +7,19 @@ AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
 
 REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
 """
+import os
+import tempfile
+import copy
+import commands
+import shutil
+
+from amberio.ambertools import AMBERHOME,KB,AmberMdout
+from amberio.mdin import ReadAmberMdinFile
+from amberio.rstr import ReadAmberRestraintFile
+
+__all__ = ['ReadAmberGroupfile','ParseAmberArguments',
+           'AmberRunCollection','AmberRun']
+
 def ReadAmberGroupfile(groupfile, engine='sander'):
     """
     Read an AMBER groupfile and return an AmberRunCollection object.
@@ -96,8 +109,6 @@ class AmberRun(object):
     (see mdin.py and rstr.py for details of these object)
     """
     def __init__(self, mode, engine, basename=None,**filenames):
-        import os
-        from mdin import ReadAmberMdinFile
         # ================================================
         # Determine filenames and build file based objects
         # ================================================
@@ -122,7 +133,11 @@ class AmberRun(object):
         # Define an AmberRestraint object if restraints are present
         self.rstr = None
         if self.HasRestraints(): # Uses info from mdin object
-            self.AddRestraints(self.mdin.GetVariableValue('DISANG',None))
+            try:
+                self.AddRestraints(self.mdin.GetVariableValue('DISANG',None))
+            except TypeError:
+                print 'WARNING! nmropt > 0, but no DISANG input provided.'
+
         # ====================================================
         # Additional parameters that are not filenames/objects
         # ====================================================
@@ -181,12 +196,10 @@ class AmberRun(object):
         self.mdin.SetRestart(isRestart)
 
     def AddRestraints(self, rstr_file, trace_file=None, print_step=None):
-        from rstr import ReadAmberRestraintFile
         if trace_file is None:
             trace_file = self.mdin.GetVariableValue('DUMPAVE',None)
         if print_step is None:
-            print_step = self.mdin.GetVariableValue('istep1','wt',
-                                                        "'DUMPFREQ'")
+            print_step = self.mdin.GetVariableValue('istep1','wt',"'DUMPFREQ'")
         self.mdin.AddRestraints(rstr_file,trace_file,print_step)
         self.rstr = ReadAmberRestraintFile(rstr_file)
             
@@ -201,8 +214,6 @@ class AmberRun(object):
         Run a single AMBER energy calculation on a coordinate file. If none is
         given, use the latest coordinate for this run.
         """
-        import os,tempfile,copy,commands,shutil
-        from ambertools import AmberMdout
         # 1) Make a temporary directory (tmpdir)
         cwd    = os.getcwd()
         tmpdir = tempfile.mkdtemp(prefix='amber-snglpnt-')
@@ -240,7 +251,6 @@ class AmberRun(object):
         coordinate file. If none is given, use the latest input coordinates for
         this run.
         """
-        from ambertools import AMBERHOME,KB
         snglpnt_mdout = self.RunSinglePoint(inpcrd)
 
         temp0 = self.mdin.GetVariableValue('temp0','cntrl')
