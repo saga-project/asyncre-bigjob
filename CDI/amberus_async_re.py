@@ -158,16 +158,19 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         u_ij = self.states[state_i].rstr.Energy(crds_j)
         return self.beta*u_ij
 
-    def _extractLastCoordinates(self,repl):
-        """
-        Returns a Nrestraint list of coordinates from the last nmropt trace file
-        of a given replica.
-        """
-        cyc = self.status[repl]['cycle_current']
-        trace = 'r%d/%s_%d.%s'%(repl,self.basename,cyc,DUMPAVE_EXT)
-        for line in open(trace,'r'):
-            coords = line.strip().split()[1:]
-        return [ float(x) for x in coords ]
+    #
+    # THIS METHOD IS ONLY EVEN APPROXIMATELY CORRECT IF istep1 is very small.
+    #
+    # def _extractLastCoordinates(self,repl):
+    #     """
+    #     Returns a Nrestraint list of coordinates from the last nmropt trace file
+    #     of a given replica.
+    #     """
+    #     cyc = self.status[repl]['cycle_current']
+    #     trace = 'r%d/%s_%d.%s'%(repl,self.basename,cyc,DUMPAVE_EXT)
+    #     for line in open(trace,'r'):
+    #         coords = line.strip().split()[1:]
+    #     return [ float(x) for x in coords ]
 
     def _hasCompleted(self,repl,cyc):
         # If the normal criteria isn't met, then return False.

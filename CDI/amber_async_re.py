@@ -5,6 +5,7 @@ import math
 #import copy  # only needed for debug
 
 import numpy as np
+from netCDF4 import Dataset # for reading netCDF trajectory files
 
 from pj_async_re import async_re_job
 from amberio.ambertools import AMBERHOME,KB,rst7
@@ -201,8 +202,12 @@ class pj_amber_job(async_re_job):
         given replica.
         """
         cyc = self.status[repl]['cycle_current']
-        rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
-        return rst7(rst).coords
+#        rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
+#        return rst7(rst).coords
+        mdcrd_name = 'r%d/%s_%d.nc'%(repl,self.basename,cyc)
+        mdcrd = Dataset(mdcrd_name,'r')
+        return mdcrd.variables['coordinates'][:][-1].ravel().tolist()
+
 
     def _checkStateParamsAreSame(self, variable, namelist):
         """
