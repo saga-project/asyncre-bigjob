@@ -1,4 +1,0 @@
-collaboration
-=============
-
-For Collaboration
