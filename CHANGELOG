@@ -1,0 +1,8 @@
+0.1.0
+Initial draft
+
+0.2.0
+Gibbs sampling for RE exchanges (IMPACT, AMBER).
+Automatic restart of failed replicas.
+Recover from some filesystem errors.
+Uploaded to public github location: https://github.com/saga-project/asyncre-bigjob
