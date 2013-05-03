@@ -2,37 +2,36 @@ import os
 import sys
 import random
 import math
-#import copy  # only needed for debug
+import copy
 
 import numpy as np
-from netCDF4 import Dataset # for reading netCDF trajectory files
 
 from pj_async_re import async_re_job
-from amberio.ambertools import AMBERHOME,KB,rst7
-from amberio.amberrun import ReadAmberGroupfile, AmberRun
+from mcmc import *
+from amberio.ambertools import AMBERHOME,KB
+from amberio.amberrun import *
+from amberio.inpcrd import *
 
-__all__ = ['pj_amber_job']
+__all__ = ['pj_amber_job','SUPPORTED_AMBER_ENGINES','DISANG_NAME','DUMPAVE_EXT']
+
+# TODO?: Cuda
+SUPPORTED_AMBER_ENGINES = {'AMBER': 'sander', 'SANDER': 'sander', 
+                            'AMBER-SANDER': 'sander', 'PMEMD': 'pmemd', 
+                            'AMBER-PMEMD': 'pmemd'}
+DISANG_NAME = 'restraint.RST' # hardcoded AMBER restraint file name
+DUMPAVE_EXT = 'TRACE' # hardcoded file extension for restraint coordinates
 
 class pj_amber_job(async_re_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
-        # TODO: Move this to async_re_job?
-        self.verbose = False
-        if self.keywords.get('VERBOSE') == "yes": self.verbose = True
         
         # ===========================
         # Set up the AMBER executable
         # ===========================
         engine = self.keywords.get('ENGINE').upper()
-        # TODO?: Cuda
-        supported_amber_engines = {'AMBER'        : 'sander', 
-                                   'SANDER'       : 'sander', 
-                                   'AMBER-SANDER' : 'sander',
-                                   'PMEMD'        : 'pmemd', 
-                                   'AMBER-PMEMD'  : 'pmemd'}
-        if supported_amber_engines.has_key(engine):
-            engine = supported_amber_engines[engine]
+        if SUPPORTED_AMBER_ENGINES.has_key(engine):
+            engine = SUPPORTED_AMBER_ENGINES[engine]
         else:
             self._exit('Requested ENGINE (%s) is either invalid or not '
                        'currently supported.'%engine)
@@ -51,7 +50,7 @@ class pj_amber_job(async_re_job):
         # (1) If present, read the AMBER groupfile and define the states,
         if self.keywords.get('AMBER_GROUPFILE') is not None:
             groupfile = self.keywords.get('AMBER_GROUPFILE')
-            self.states = ReadAmberGroupfile(groupfile,engine)
+            self.states = read_amber_groupfile(groupfile,engine)
             self.nreplicas = len(self.states)
             if self.verbose:
                 print ('Creating %d replicas from AMBER groupfile: %s'
@@ -64,43 +63,15 @@ class pj_amber_job(async_re_job):
                 self._exit('Could not determine the replica count from the'
                            ' input provided (set NREPLICAS directly or provide'
                            ' an AMBER groupfile)')
-            # These are the bare minimum files that can define a state.
-            files = {'mdin' : None, 'prmtop' : None, 'inpcrd' : None}
-            # First, try to match against the known extfiles based off of 
-            # their file extensions.
-            exts = { 'mdin'   : ['.in','.inp','.mdin'],
-                     'prmtop' : ['.prmtop','.parm7','.parm'],
-                     'inpcrd' : ['.inpcrd','.rst7','.mdcrd','.crd','rst'] }
-            if self.extfiles is not None:
-                for file in self.extfiles:
-                    basename,ext = os.path.splitext(file)
-                    if ext in exts['mdin']:
-                        files['mdin'] = file
-                    elif ext in exts['prmtop']:
-                        files['prmtop'] = file
-                    elif ext in exts['inpcrd']:
-                        files['inpcrd'] = file
-            # Next, check in the current directory using the basename.
-            for input in exts.keys():
-                for ext in exts[input]:
-                    file = '%s%s'%(self.basename,ext)
-                    if os.path.exists(file) and files[input] is None:
-                        files[input] = file
-            # There's no way to delineate reference and input coordinates w/o
-            # using a groupfile. Best guess is to assume they are the same.
-            files['ref'] = files['inpcrd']
-            # Give an error if no match of required files could be made.
-            for input in exts.keys():
-                if files[input] is None:
-                    self._exit('Could not identify a(n) %s file based on the'
-                               ' given input!'%input)
-            # Define states with these file names
+            print 'basename',self.basename
+            print 'extfiles',self.extfiles
+            print 'nreplicas',self.nreplicas
+            self.states = amberrun_from_files(self.basename,self.extfiles,
+                                              self.nreplicas,'-O',engine)
             if self.verbose:
                 print ('Creating %d replicas using the provided'
                        ' ENGINE_INPUT_EXTFILES and ENGINE_INPUT_BASENAME'
                        %self.nreplicas)
-            self.states = [ AmberRun(mode='-O',engine=engine,**files)
-                            for n in range(self.nreplicas) ]
 
     def _buildInpFile(self, repl):
         """
@@ -111,33 +82,32 @@ class pj_amber_job(async_re_job):
         4) link to a new ref file (as needed)
         5) link to the inpcrd from cycle = 0 if cycle = 1
         """
-        # convenient shorthand for current information
         sid = self.status[repl]['stateid_current']
         cyc = self.status[repl]['cycle_current']
-        new_state = self.states[sid] # AmberRun object defining the state
-        new_mdin = 'r%d/mdin'%repl
-        new_prmtop = new_state.filenames['prmtop']
-        new_refcrd = new_state.filenames['ref']
-        new_inpcrd = new_state.filenames['inpcrd']
-        
-        # Write or link to new state inputs, this includes:
-        # 1) a new mdin file (a restart if cycle > 1)
-        # 2) a new prmtop file 
-        # 4) new ref coordinates (depends on mdin contents) 
-        # 5) input coordinates (only if the cycle = 1)
-        if cyc > 1: new_state.SetRestart()
-        new_state.mdin.WriteAmberMdinFile(new_mdin)
-
-        self._linkReplicaFile('prmtop',new_prmtop,repl)
-
-        if new_state.HasReferenceCoordinates():
-            self._linkReplicaFile('refc',new_refcrd,repl)
-
+        # Make a copy of one of the existing AmberRun state templates.
+        title = ' replica %d : state %d : cycle %d'%(repl,sid,cyc)
+        self.states[sid].mdin.title = title
+        # Modify the template as appropriate.
+        if cyc > 1: 
+            self.states[sid].restart()
+        if self.states[sid].has_restraints():
+            rstr_title = title
+            rstr_file = 'r%d/%s'%(repl,DISANG_NAME)
+            self.states[sid].rstr.write_amber_restraint_file(rstr_file,title)
+            trace_file = '%s_%d.%s'%(self.basename,cyc,DUMPAVE_EXT)
+            self.states[sid].mdin.set_namelist_value('DUMPAVE',trace_file,None)
+        self.states[sid].mdin.write_amber_mdin('r%d/mdin'%repl)
+        # Links
+        prmtop = self.states[sid].filenames['prmtop']
+        self._linkReplicaFile('prmtop',prmtop,repl)
+        if self.states[sid].has_refc():
+            refc = self.states[sid].filenames['ref']
+            self._linkReplicaFile('refc',refc,repl)
         if cyc == 1:
-            inpcrd = '%s_0.rst7'%self.basename
-            self._linkReplicaFile(inpcrd,new_inpcrd,repl)
+            inpcrd = self.states[sid].filenames['inpcrd']
+            self._linkReplicaFile('%s_0.rst7'%self.basename,inpcrd,repl) 
 
-    def _launchReplica(self,repl,cyc):
+    def _launchReplica(self, repl, cyc):
         """
         Launch an AMBER sub-job using pilot-job. 
 
@@ -183,31 +153,14 @@ class pj_amber_job(async_re_job):
         rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
         return os.path.exists(rst)
 
-    def _linkReplicaFile(self, link_filename, real_filename, repl):
+    def _extractLastCoordinates(self, repl):
         """
-        Link the file at real_filename to the name at link_filename in the
-        directory belonging to the given replica. If a file is already linked
-        to this name (e.g. from a previous cycle), remove it first.
-        """
-        # TODO: move this to pj_async_re?
-        real_filename = '../%s'%real_filename
-        os.chdir('r%d'%repl)
-        if os.path.exists(link_filename): os.remove(link_filename)
-        os.symlink(real_filename,link_filename)
-        os.chdir('..')
-
-    def _extractLastCoordinates(self,repl):
-        """
-        Returns a 3N list of coordinates from the last restart (rst7) file of a
+        Return a 3N list of coordinates from the last restart (rst7) file of a
         given replica.
         """
         cyc = self.status[repl]['cycle_current']
-#        rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
-#        return rst7(rst).coords
-        mdcrd_name = 'r%d/%s_%d.nc'%(repl,self.basename,cyc)
-        mdcrd = Dataset(mdcrd_name,'r')
-        return mdcrd.variables['coordinates'][:][-1].ravel().tolist()
-
+        rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
+        return rst7(rst,self.states[repl].restrt_is_binary()).coords
 
     def _checkStateParamsAreSame(self, variable, namelist):
         """
@@ -219,9 +172,9 @@ class pj_amber_job(async_re_job):
         that certain state parameters (e.g. temperature) are the same in all 
         states.
         """
-        value = self.states[0].mdin.GetVariableValue(variable,namelist)
+        value = self.states[0].mdin.namelist_value(variable,namelist)
         for state in self.states[1:]:
-            this_value = state.mdin.GetVariableValue(variable,namelist)
+            this_value = state.mdin.namelist_value(variable,namelist)
             if this_value != value: return False
         return value
 
@@ -250,13 +203,13 @@ class pj_amber_job(async_re_job):
                                 and self.status[k]['cycle_current'] > 1 ) ]
         return states_waiting
 
-    def _weighted_choice_sub(self,weights):
-        # gives random choice from a set with weighted probabilities
-        rnd = random.random() #* sum(weights)
-        for i, w in enumerate(weights):
-            rnd -= w
-            if rnd < 0:
-                return i
+    # def _weighted_choice_sub(self,weights):
+    #     # gives random choice from a set with weighted probabilities
+    #     rnd = random.random() #* sum(weights)
+    #     for i, w in enumerate(weights):
+    #         rnd -= w
+    #         if rnd < 0:
+    #             return i
    
     # def _gibbs_re_j(self,repl_i,replicas,U):
     #     # Select a replica swap partner based off independence sampling
@@ -269,34 +222,24 @@ class pj_amber_job(async_re_job):
     #     ps = np.exp(-ps)
     #     ps /= ps.sum()
     #     return replicas[self._weighted_choice_sub(ps)]
-      
-    @staticmethod
-    def MetropolisAcceptance(du):
-        """
-        Return whether a Monte Carlo move is accepted or not based off of the
-        Metropolis criteria:
 
-        P_accept = min{1,exp(-du)}
-
-        where du = u_new - u_old is the difference in the new and old
-        REDUCED (i.e. in kT units) energy difference.
-        """
-        acceptMove = True
-        if du > 0.:
-            Pacc = math.exp(-du)
-            rand = random.random()
-            if rand > Pacc: 
-                acceptMove = False
-        return acceptMove
-
-    @staticmethod
-    def ReplicaExchange(u11,u22,u12,u21):
-        du = u12 + u21 - u11 - u22
-        return pj_amber_job.MetropolisAcceptance(du)
-
-    def _computeSwapMatrix(self,replicas,states):
-        # TODO: Implement this with single point energy calls to AMBER
-        pass
+    def _computeSwapMatrix(self, replicas, states):
+        # U will be sparse matrix, but is convenient bc the indices of the
+        # rows and columns will always be the same.
+        U = [[ 0. for j in range(self.nreplicas)] 
+             for i in range(self.nreplicas)]
+        for repl_i in replicas:
+            cyc = self.status[repl_i]['cycle_current']  
+            inpcrd_i = '%s/r%d/%s_%d.rst7'%(os.getcwd(),repl_i,self.basename,
+                                            cyc)
+            for sid_j in states:
+                state_dir = '%s/r%d'%(os.getcwd(),sid_j)
+                # energy of replica i in state j
+                os.chdir('r%d'%sid_j)
+                u_ji = self.states[sid_j].reduced_energy(inpcrd_i)
+                U[sid_j][repl_i] = u_ji
+                os.chdir('..')
+        return U
 
     def _swapStates(self, repl_a, repl_b):
         sid_a = self.status[repl_a]['stateid_current']
@@ -358,7 +301,17 @@ class pj_amber_job(async_re_job):
         nreps = nwaiting**3
         # npermt = {}
         # permt = {}
-        U = self._computeSwapMatrix(replicas_waiting,states_waiting)
+        # U = self._computeSwapMatrix(replicas_waiting,states_waiting)
+
+        Unew,Uold = self._computeSwapMatrix(replicas_waiting,states_waiting)
+        for i in range(self.nreplicas):
+            for j in range(self.nreplicas):
+                exp_OLD = Uold[i][i] + Uold[j][j] - Uold[i][j] - Uold[j][i]
+                exp_NEW = Unew[i][i] + Unew[j][j] - Unew[i][j] - Unew[j][i]
+                diff = exp_NEW - exp_OLD
+                print 'old % 20.8f new % 20.8f diff % 20.8f'%(exp_OLD,exp_NEW,diff) 
+        U = Uold
+
         # Remember that U is nreplicas x nreplicas with rows corresponding
         # to the replica ids and columns corresponding to the STATIC state
         # ids (state id and replica id can and will be different)
@@ -391,10 +344,10 @@ class pj_amber_job(async_re_job):
             repl_i,repl_j = random.sample(replicas_waiting,2)
             sid_i = self.status[repl_i]['stateid_current']
             sid_j = self.status[repl_j]['stateid_current']
-            exchange = pj_amber_job.ReplicaExchange(U[sid_i][repl_i],
-                                                    U[sid_j][repl_j],
-                                                    U[sid_i][repl_j],
-                                                    U[sid_j][repl_i])
+            exchange = replica_exchange_acceptance(U[sid_i][repl_i],
+                                                   U[sid_j][repl_j],
+                                                   U[sid_i][repl_j],
+                                                   U[sid_j][repl_i])
             # if self.verbose: self._printExchangePairReport(repl_i,repl_j,
             #                                                U[sid_i][repl_i],
             #                                                U[sid_j][repl_j],

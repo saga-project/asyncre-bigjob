@@ -2,10 +2,28 @@ import os
 import random, math # Only used in the now deprected _doExchange_pair()
 
 from pj_async_re import async_re_job
-from amber_async_re import pj_amber_job, KB
+from amber_async_re import *
+from amberio.ambertools import AMBERHOME,KB
 
-DISANG_NAME = 'US.RST' # Hardcoded AMBER restraint file name.
-DUMPAVE_EXT = 'TRACE' # Hardcoded file extension for restraint coordinates.
+def _parse_state_params(paramline, state_delimiter=':'):
+    """
+    Return a list of restraint parameters defining a set of states given a 
+    delimited string of those parameters. The parameters are assumed to be
+    comma delimited, but the state delimiter can be changed.
+
+    Example:
+    >>> rstr_list = '1.00,1.00:1.00,2.00' # two states in two dimensions
+    >>> _parse_state_params(rstr_list)
+    [[1.0,1.0],[1.0,2.0]]
+    """
+    # If each state is only one dimension, make it a single element list. 
+    # This makes iterating all parameter lists the same.
+    if [paramline] == paramline.split(state_delimiter):
+        params = [[float(param)] for param in paramline.split(',')]
+    else:
+        params = [[float(param) for param in state.split(',')] 
+                  for state in paramline.split(state_delimiter)]
+    return params
 
 class amberus_async_re_job(pj_amber_job,async_re_job):
 
@@ -26,35 +44,23 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         # ============================
         # Umbrella Sampling Parameters
         # ============================
-        # Quick function to convert delimited state parameters to a 2d list
-        def ParseStateParams(paramline, state_delimiter=':'):
-            if [paramline] == paramline.split(state_delimiter):
-                params = [ [item] for item in paramline.split(',') ]
-            else:
-                params = [ item.split(',') 
-                           for item in paramline.split(state_delimiter)]
-            return params
-
-        # list of force constants
+        # Parse the list of force constants and bias positions and check that
+        # they are the proper dimensions (i.e. match each other).
         if self.keywords.get('FORCE_CONSTANTS') is None:
             self._exit("FORCE_CONSTANTS needs to be specified")
-        kbias = ParseStateParams(self.keywords.get('FORCE_CONSTANTS'))
-        # list of bias positions
+        kbias = _parse_state_params(self.keywords.get('FORCE_CONSTANTS'))
         if self.keywords.get('BIAS_POSITIONS') is None:
             self._exit("BIAS_POSITIONS needs to be specified")
-        posbias = ParseStateParams(self.keywords.get('BIAS_POSITIONS'))
-        # check that parameter dimensions match
+        posbias = _parse_state_params(self.keywords.get('BIAS_POSITIONS'))
         nR0 = len(posbias)
         nK0 = len(kbias)
-        n   = self.nreplicas
+        n = self.nreplicas
         if nR0 != nK0:
-            msg = ('Number of FORCE_CONSTANTS not equal to number of'
-                   ' BIAS_POSITIONS')
-            self._exit(msg)
+            self._exit('Number of FORCE_CONSTANTS not equal to number of'
+                       ' BIAS_POSITIONS')
         if nR0 != n or nK0 != n:
-            msg = ('Expected %d umbrella parameter sets, but instead found %d'
-                   ' FORCE_CONSTANTS and %d BIAS_POSITIONS'%(n,nK0,nR0))
-            self._exit(msg)
+            self._exit('Expected %d umbrella parameter sets, but instead found'
+                       ' %d FORCE_CONSTANTS and %d BIAS_POSITIONS'%(n,nK0,nR0))
                    
         # Look for a restraint template (try the basename?)
         if self.keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
@@ -67,30 +73,9 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         # Read the restraint template and then modify the restraint objects 
         # based on the input. 
         for n,state in enumerate(self.states):
-            state.AddRestraints(restraint_template)
-            state.mdin.SetVariableValue('DISANG',DISANG_NAME,None)
-            state.rstr.SetRestraintParameters(r0=posbias[n],k0=kbias[n])
-
-    def _buildInpFile(self, repl):
-        """
-        Builds input files for an AMBER umbrella sampling replica based on the
-        current state and cycle. For simplicity, all restraint files are named
-        US.RST and are remade at every cycle.
-        """
-        sid = self.status[repl]['stateid_current']
-        cyc = self.status[repl]['cycle_current']
-
-        # 1) Write a new restraint file for the current state
-        # 2) Modify the input to print to a new output (trace) file
-        title =  (' umbrella sampling restraint for replica %d in state %d'
-                  ' during cycle %d'%(repl,sid,cyc))
-        rst_file = 'r%d/%s'%(repl,DISANG_NAME)
-        self.states[sid].rstr.WriteAmberRestraintFile(rst_file,title)
-        trace_file = '%s_%d.%s'%(self.basename,cyc,DUMPAVE_EXT)
-        self.states[sid].mdin.SetVariableValue('DUMPAVE',trace_file,None)
-        # NB! This needs to be done last since the mdin file is written by
-        # this routine and the mdin object was modified here.
-        pj_amber_job._buildInpFile(self,repl)
+            state.add_restraints(restraint_template)
+            state.mdin.set_namelist_value('DISANG',DISANG_NAME,None)
+            state.rstr.set_restraint_params(r0=posbias[n],k0=kbias[n])
 
     def _doExchange_pair(self, repl_a, repl_b):
         """Given two replicas, swap the state ids according to the Metropolis
@@ -122,10 +107,10 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         umbrella = self.states[sid].rstr
         crds = self._extractLastCoordinates(repl)
         print '\nUmbrella potential report:'
-        umbrella.PrintRestraintReport(crds)
-        umbrella.PrintRestraintEnergyReport(crds)
+        umbrella.print_restraint_report(crds)
+        umbrella.print_restraint_energy_report(crds)
   
-    def _computeSwapMatrix(self, replicas, states):
+    def _computeSwapMatrix_OLD(self, replicas, states):
         """
         Compute the swap matrix U = (u_ij), where u_ij = u_i(x_j)
        
@@ -139,15 +124,20 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         """
         # U will be sparse matrix, but is convenient bc the indices of the
         # rows and columns will always be the same.
-        U = [ [ 0. for j in range(self.nreplicas) ] 
-              for i in range(self.nreplicas) ]
+        U = [[ 0. for j in range(self.nreplicas)] 
+             for i in range(self.nreplicas)]
         for repl_i in replicas:
             crds_i = self._extractLastCoordinates(repl_i)
             for sid_j in states:
                 # energy of replica i in state j
-                u_ji = self.states[sid_j].rstr.Energy(crds_i)
+                u_ji = self.states[sid_j].rstr.energy(crds_i)
                 U[sid_j][repl_i] = self.beta*u_ji
         return U
+
+    def _computeSwapMatrix(self, replicas, states):
+        U_old = self._computeSwapMatrix_OLD(replicas,states)
+        U_new = pj_amber_job._computeSwapMatrix(self,replicas,states)
+        return U_new,U_old
 
     def _reduced_energy(self, state_i, repl_j):
         """
@@ -155,24 +145,10 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         NB: This is NOT the same as the current state of replica i.
         """
         crds_j = self._extractLastCoordinates(repl_j)
-        u_ij = self.states[state_i].rstr.Energy(crds_j)
+        u_ij = self.states[state_i].rstr.energy(crds_j)
         return self.beta*u_ij
 
-    #
-    # THIS METHOD IS ONLY EVEN APPROXIMATELY CORRECT IF istep1 is very small.
-    #
-    # def _extractLastCoordinates(self,repl):
-    #     """
-    #     Returns a Nrestraint list of coordinates from the last nmropt trace file
-    #     of a given replica.
-    #     """
-    #     cyc = self.status[repl]['cycle_current']
-    #     trace = 'r%d/%s_%d.%s'%(repl,self.basename,cyc,DUMPAVE_EXT)
-    #     for line in open(trace,'r'):
-    #         coords = line.strip().split()[1:]
-    #     return [ float(x) for x in coords ]
-
-    def _hasCompleted(self,repl,cyc):
+    def _hasCompleted(self, repl, cyc):
         # If the normal criteria isn't met, then return False.
         if not pj_amber_job._hasCompleted(self,repl,cyc):
             return False

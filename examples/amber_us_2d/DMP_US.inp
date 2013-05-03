@@ -1,11 +1,11 @@
  GB MD with umbrella restraint
  &cntrl
   irest=1, ntx=5,
-  nstlim=1000, ntpr=500, ntwx=500,
-  ioutfm = 1,
+  nstlim=1000, ntpr=500, ntwx=0,
+  ioutfm = 1, ntxo = 2,
   ntc=2, ntf=2, tol=1e-08,
   ntt=3, temp0=310.0, gamma_ln=5.0,
-  igb=2, ! nmropt=1, 
+  igb=2, 
   ig=-1
  /
  &wt 
