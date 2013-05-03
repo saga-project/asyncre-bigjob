@@ -4,17 +4,18 @@ included with AmberTools (12 and later)
 
 AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
 """
-import os,sys
+import os
+import sys
 
 try:
     AMBERHOME = os.getenv('AMBERHOME')
 except:
     raise Exception('AMBERHOME is not set.')
-sys.path.append(os.path.join(os.path.join(AMBERHOME,'bin')))
+sys.path.append(os.path.join(AMBERHOME,'bin'))
 try:
     from mdoutanalyzer.mdout import AmberMdout
     from chemistry.amber.readparm import rst7
-except:
+except ImportError:
     raise Exception('Could not load AMBER python libraries. These are'
                     ' only available in AmberTools12 and later.')
 

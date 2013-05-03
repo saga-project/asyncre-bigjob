@@ -1,5 +1,5 @@
-'Lightweight module for using AMBER restraints'
+'Python interface for AMBER input/output'
 
 __author__ = 'Brian K. Radak <radakb@biomaps.rutgers.edu>'
 
-__all__ = ['ambertools','amberrun','mdin','rstr']
+__all__ = ['ambertools','amberrun','mdin','rstr','inpcrd']

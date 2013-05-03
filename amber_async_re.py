@@ -301,16 +301,16 @@ class pj_amber_job(async_re_job):
         nreps = nwaiting**3
         # npermt = {}
         # permt = {}
-        # U = self._computeSwapMatrix(replicas_waiting,states_waiting)
+        U = self._computeSwapMatrix(replicas_waiting,states_waiting)
 
-        Unew,Uold = self._computeSwapMatrix(replicas_waiting,states_waiting)
-        for i in range(self.nreplicas):
-            for j in range(self.nreplicas):
-                exp_OLD = Uold[i][i] + Uold[j][j] - Uold[i][j] - Uold[j][i]
-                exp_NEW = Unew[i][i] + Unew[j][j] - Unew[i][j] - Unew[j][i]
-                diff = exp_NEW - exp_OLD
-                print 'old % 20.8f new % 20.8f diff % 20.8f'%(exp_OLD,exp_NEW,diff) 
-        U = Uold
+        #Unew,Uold = self._computeSwapMatrix(replicas_waiting,states_waiting)
+        #for i in range(self.nreplicas):
+        #    for j in range(self.nreplicas):
+        #        exp_OLD = Uold[i][i] + Uold[j][j] - Uold[i][j] - Uold[j][i]
+        #        exp_NEW = Unew[i][i] + Unew[j][j] - Unew[i][j] - Unew[j][i]
+        #        diff = exp_NEW - exp_OLD
+        #        print 'old % 20.8f new % 20.8f diff % 20.8f'%(exp_OLD,exp_NEW,diff) 
+        #U = Uold
 
         # Remember that U is nreplicas x nreplicas with rows corresponding
         # to the replica ids and columns corresponding to the STATIC state

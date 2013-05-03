@@ -10,27 +10,31 @@ AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
 
 REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
 """
-from math import pi
 import sys
+from math import pi
+from itertools import permutations
+import re
+
 import coordinates
+from namelist import read_namelists
 
-__all__ = ['ReadAmberRestraintFile','AmberRestraint','NmroptRestraint']
+__all__ = ['read_amber_restraint','AmberRestraint','NmroptRestraint']
 
-def ReadAmberRestraintFile(rstFilename):
+
+def read_amber_restraint(rst_name):
     """
     Read an AMBER restraint file (usually file extension RST) and return an
     AmberRestraint object containing each restraint found therein.
 
     REQUIRED ARGUMENTS:
-    rstFilename - file containing AMBER "&rst" namelists
+    rst_name - file containing AMBER "&rst" namelists
 
     RETURN VALUES:
-    amberRst - AmberRestraint object (list of NmroptRestraint)
+    restraint - AmberRestraint object (list of NmroptRestraint)
     """
-    from namelist import ReadNamelists
-    amberRstr = AmberRestraint()
+    restraint = AmberRestraint()
     # Read the namelists from the restraint file and look for &rst namelists
-    namelists = ReadNamelists(rstFilename)
+    namelists = read_namelists(rst_name)
     for nl in namelists:
         if nl.name == 'rst':
             # only the iat keyword is required to define a restraint
@@ -40,19 +44,114 @@ def ReadAmberRestraintFile(rstFilename):
             iat = tuple([ int(i) for i in nl.pop('iat').split(',') ])
             if nl.has_key('rstwt'):
                 rstwt = nl.pop('rstwt')
-                amberRstr.append(GenDistCoordRestraint(iat,rstwt,**nl))
+                restraint.append(GenDistCoordRestraint(iat,rstwt,**nl))
             else:
                 if len(iat) == 2:
-                    amberRstr.append(BondRestraint(iat,**nl))
+                    restraint.append(BondRestraint(iat,**nl))
                 elif len(iat) == 3:
-                    amberRstr.append(AngleRestraint(iat,**nl))
+                    restraint.append(AngleRestraint(iat,**nl))
                 elif len(iat) == 4:
-                    amberRstr.append(TorsionRestraint(iat,**nl))
+                    restraint.append(TorsionRestraint(iat,**nl))
                 else:
                     raise Exception('Bad iat specification')
-    if len(amberRstr) < 1:
+    if len(restraint) < 1:
         print 'WARNING! No &rst namelists were found in %s.'%rstFilename
-    return amberRstr
+    return restraint
+
+def _extract_restraint_params_from_mdout(mdout_name):
+    """Extract the restraint parameters from the report in an mdout file.
+    """
+    iat1_pattern = "(\([ 0-9]+?\))" # pattern for atom 1
+    iat1p_pattern = "(\([ 0-9]+?\))*?" # pattern for atoms 1+
+    iat_pattern = ("^.*?%s.*?%s[^\)\(]*?%s[^\)\(]*?%s[^\)\(]*$"
+                   %(iat1_pattern,iat1p_pattern,iat1p_pattern,iat1p_pattern))
+    iat_pattern_obj = re.compile(r"%s"%iat_pattern)
+    
+    restraint_params = {'iat': [], 
+                   'R1': [], 'R2': [], 'R3': [], 'R4': [],
+                   'RK2': [], 'RK3': []}
+    bias_pattern = ("^R1 =(?P<R1>[ 0-9\-\+\.]+) "
+                    "+R2 =(?P<R2>[ 0-9\-\+\.]+) "
+                    "+R3 =(?P<R3>[ 0-9\-\+\.]+) "
+                    "+R4 =(?P<R4>[ 0-9\-\+\.]+) "
+                    "+RK2 =(?P<RK2>[ 0-9\-\+\.]+) "
+                    "+RK3 =(?P<RK3>[ 0-9\-\+\.]+)")
+    bias_pattern_obj = re.compile(r'%s'%bias_pattern)
+
+    at_toadd = []
+    for line in open(mdout_name,'r'):
+        # Accumulate a list of integers between parantheses. These may or may
+        # not correspond to the atom selection of a restraint.
+        iat_match = iat_pattern_obj.search(line)
+        if iat_match is not None:
+            for iat_str in iat_match.groups():
+                if iat_str is not None:
+                    at_toadd.append(int(iat_str.strip(')').strip('(').strip()))
+        # Look for a restraint report. If one is found, the atom list DOES
+        # belong to a restraint. Append the atom list.
+        bias_match = bias_pattern_obj.search(line)
+        if bias_match is not None:
+            restraint_params['iat'].append(at_toadd)
+            at_toadd = []
+            for param in restraint_params.keys():
+                if param != 'iat':
+                    restraint_params[param].append(
+                        float(bias_match.group(param)))
+    return restraint_params
+
+def read_amber_restraint_from_mdout(mdout_name, rstwt=None):
+    """
+    Read an AMBER mdout file and return an AmberRestraint object containing 
+    each restraint found therein. 
+
+    This information is only present if the variable LISTIN=POUT was set. It is
+    also incomplete with respect to generalized distance coordiantes, as no
+    rstwt data is reported. WARNING! such restraints will be identified 
+    incorrectly unless that information is provided in the 'rstwt' argument.
+
+    REQUIRED ARGUMENTS:
+    mdout_name - AMBER mdout file
+
+    OPTIONAL ARGUMENTS:
+    rstwt - If not None, a sequence of rstwts to be assigned to the restraints
+    in order.
+
+    RETURN VALUES:
+    restraint - AmberRestraint object (list of NmroptRestraint)
+    """
+    restraint_params = _extract_restraint_params_from_mdout(mdout_name)
+   
+    restraint = AmberRestraint()
+    for i,iat in enumerate(restraint_params['iat']):
+        #     Since the restraint report in mdout does not contain rstwt data,
+        # the only way to identify generalized distance coordinates is to
+        # provide these a priori. If the 'rstwt' argument is not 'None', it is
+        # expected to be a sequence of rstwts. The elements in rstwt are then 
+        # assigned to the restraints in order until the sequence is exhausted.
+        is_gendistcoord = False
+        if rstwt is not None:
+            try:
+                test = rstwt[i][:]
+                restraint.append(GenDistCoordRestraint(iat,rstwt[i]))
+                is_gendistcoord = True
+            except (TypeError,IndexError):
+                is_gendistcoord = False
+        if not is_gendistcoord:
+            if len(iat) == 2:
+                restraint.append(BondRestraint(iat))
+            elif len(iat) == 3:
+                restraint.append(AngleRestraint(iat))
+            elif len(iat) == 4:
+                restraint.append(TorsionRestraint(iat))
+            else:
+                raise Exception('Bad iat specification')
+            restraint[i].SetRestraintParameters(r1=restraint_params['R1'][i],
+                                                r2=restraint_params['R2'][i],
+                                                r3=restraint_params['R3'][i],
+                                                r4=restraint_params['R4'][i],
+                                                rk2=restraint_params['RK2'][i],
+                                                rk3=restraint_params['RK3'][i])
+    return restraint
 
 
 class AmberRestraint(list):
@@ -61,9 +160,9 @@ class AmberRestraint(list):
 
     (See NmroptRestraint for further details.)
     """
-    def __init__(self, *rstrs):
+    def __init__(self, *restraints):
         list.__init__(self)
-        for rstr in rstrs: self.extend(rstr)
+        for restraint in restraints: self.extend(restraint)
         
     def append(self, item):
         if not isinstance(item, NmroptRestraint):
@@ -79,12 +178,11 @@ class AmberRestraint(list):
         if len(self) != len(other):
             return False
         # Must test all possible permutations!
-        from itertools import permutations
         areSame = False
         for perm_i in permutations(self):
             for perm_j in permutations(other):
-                for rstr_i,rstr_j in zip(perm_i,perm_j):
-                    if rstr_i != rstr_j:
+                for restraint_i,restraint_j in zip(perm_i,perm_j):
+                    if restraint_i != restraint_j:
                         areSame = False
                         break
                     else:
@@ -96,33 +194,33 @@ class AmberRestraint(list):
     def __ne__(self, other):
         return not AmberRestraint.__eq__(self,other)
 
-    def SetRestraintParameters(self, **rstr_params):
+    def set_restraint_params(self, **restraint_params):
         """
-        Convenience function for setting any of r0, r1, r2, r3, r4, k0, rk2, and
-        rk3 by list assignment. 
+        Convenience function for setting any of r0, r1, r2, r3, r4, k0, rk2, 
+        and rk3 by list assignment. 
 
         Parameters will be assigned in order until either no parameters or 
-        restraints are left. Thus, paramaters can be set for restraints 1 and 2,
-        but not 1 and 3. For the latter case the individual restraints must
+        restraints are left. Thus, paramaters can be set for restraints 1 and 
+        2, but not 1 and 3. For the latter case the individual restraints must
         be modified directly.
         """
-        nrstrs = len(self)
-        for params,values in rstr_params.iteritems():
+        nrestraints = len(self)
+        for params,values in restraint_params.iteritems():
             nvalues = len(values)
             # case 1: more restraints than parameter values
-            if nrstrs >= nvalues:
+            if nrestraints >= nvalues:
                 for i,value in enumerate(values):
-                    self[i].SetRestraintParameters(**{params:float(value)})
+                    self[i].set_restraint_params(**{params:float(value)})
             # case 1: more parameter values than restraints 
             #         (better to ask for forgiveness than permission)
             else:
                 print ('Warning: %d restraint parameters were specified, but'
-                       ' only %s restraints are defined.'%(nvalues,nrstrs))
-                for i,rstr in enumerate(self):
-                    value = float(rstr_params[params][i])
-                    rstr.SetRestraintParameters(**{params:value})
+                       ' only %s restraints are defined.'%(nvalues,nrestraints))
+                for i,restraint in enumerate(self):
+                    value = float(restraint_params[params][i])
+                    restraint.set_restraint_params(**{params:value})
 
-    def Energy(self, crds):
+    def energy(self, crds):
         """
         Calculate the total energy from all restraints.
 
@@ -136,12 +234,14 @@ class AmberRestraint(list):
         """
         energy = 0.
         if len(crds) == len(self):
-            for rst,r in zip(self,crds): energy += rst.Energy(r)
+            for rstr,r in zip(self,crds): 
+                energy += rstr.energy(r)
         else:
-            for rst in self: energy += rst.Energy(crds)
+            for rstr in self: 
+                energy += rstr.energy(crds)
         return energy
 
-    def EnergyAndGradients(self, crds):
+    def energy_and_gradients(self, crds):
         """
         THIS IS CURRENTLY BROKEN AND RETURNS ALL GRADIENTS AS ZERO!
 
@@ -160,13 +260,14 @@ class AmberRestraint(list):
         """
         energy = 0.
         gradients = [ 0. for n in range(len(crds)) ]
-        for rst in self:
-            e,g = rst.EnergyAndGradients(crds)
+        for rstr in self:
+            e,g = rstr.energy_and_gradients(crds)
             energy += e
-            for i in range(len(g)): gradients[i] += g[i]
+            for i in range(len(g)): 
+                gradients[i] += g[i]
         return energy,gradients
 
-    def DecomposeEnergy(self, crds):
+    def decompose_energy(self, crds):
         """Decompose (by restraint type) the total energy from all restraints.
 
         REQUIRED ARGUMENTS:
@@ -186,16 +287,16 @@ class AmberRestraint(list):
         energy = {'Bond':0., 'Angle':0., 'Torsion':0., 'Gen. Dist. Coord.':0.}
         if len(crds) == len(self):
             for rst,r in zip(self,crds):
-                energy[component_type[type(rst)]] += rst.Energy(r)
+                energy[component_type[type(rst)]] += rst.energy(r)
         else:
             for rst,r in zip(self,crds):
-                energy[component_type[type(rst)]] += rst.Energy(crds)
+                energy[component_type[type(rst)]] += rst.energy(crds)
         eRestraint = 0.
         for key in energy.keys(): eRestraint += energy[key]
         energy['Restraint'] = eRestraint
         return energy
 
-    def PrintRestraintReport(self, crds=None, anames=None):
+    def print_restraint_report(self, crds=None, anames=None):
         """
         Print a restraint report in the same format as AMBER output.
         Information not available from a restraint file (e.g. atom names) will
@@ -207,24 +308,24 @@ class AmberRestraint(list):
         """
         for rst in self:
             print '******' 
-            rst.PrintRestraintReport(crds,anames)
+            rst.print_restraint_report(crds,anames)
         print '%23sNumber of restraints read = %5d'%('',len(self))
 
-    def PrintRestraintEnergyReport(self, crds):
+    def print_restraint_energy_report(self, crds):
         """
         Print a restraint energy report in the same format as AMBER output.
 
         REQUIRED ARGUMENTS:
         crds - 3N list of coordinates (in Angstroms)
         """
-        e = self.DecomposeEnergy(crds)
+        e = self.decompose_energy(crds)
         print (' NMR restraints: Bond =%9.3f   Angle = %9.3f   Torsion = %9.3f'
                %(e['Bond'],e['Angle'],e['Torsion']))
         if e['Gen. Dist. Coord.'] > 0.:
             print ('               : Gen. Dist. Coord. = %9.3f'
                    %e['Gen. Dist. Coord.'])
 
-    def WriteAmberRestraintFile(self, outfile, title=''):
+    def write_amber_restraint_file(self, outfile, title='', mode='w'):
         """
         Write an AMBER restraint file with all of the current restraints.
 
@@ -237,7 +338,7 @@ class AmberRestraint(list):
         if hasattr(outfile,'write'):
             pass
         elif isinstance(outfile,str):
-            outfile = open(outfile,'w')
+            outfile = open(outfile,mode)
         else:
             raise TypeError("'outfile' must be either a string or file object.")
         outfile.write('%s\n'%title)
@@ -272,17 +373,17 @@ class NmroptRestraint(object):
     iat - list of atom indices defining the restraint
 
     OPTIONAL ARGUMENTS:
-    rstr_params - any of r0, r1, r2, r3, r4, k0, rk2, and rk3 can be set by
+    restraint_params - any of r0, r1, r2, r3, r4, k0, rk2, and rk3 can be set by
     direct assignment. r0 and k0 will override all other specifications.
 
     NB: As in AMBER, angle positions are in degrees while angle force constants
     are in radians. Distances are always in Angstroms.
     """
-    def __init__(self, iat, **rstr_params):
+    def __init__(self, iat, **restraint_params):
         self.iat = iat
         self._r  = [0., 0., 0., 0.]
         self._rk = [0., 0.]
-        self.SetRestraintParameters(**rstr_params)
+        self.set_restraint_params(**restraint_params)
 
     def __eq__(self, other):
         if not isinstance(other,type(self)):
@@ -319,12 +420,12 @@ class NmroptRestraint(object):
     def __ne__(self, other):
         return not NmroptRestraint.__eq__(self,other)  
 
-    def SetRestraintParameters(self, **rstr_params):
+    def set_restraint_params(self, **restraint_params):
         """Set any of r0, r1, r2, r3, r4, k0, rk2, and rk3 by assignment.
         """
         # A pure harmonic restraint can be set with just r0, 
-        if rstr_params.has_key('r0'):
-            r0 = float(rstr_params['r0'])
+        if restraint_params.has_key('r0'):
+            r0 = float(restraint_params['r0'])
             self._r[1:3] = [r0,r0]
             self._r[0] = self._harmonic_r1()
             self._r[3] = self._harmonic_r4()
@@ -333,8 +434,9 @@ class NmroptRestraint(object):
         else:
             rs = {'r1':0,'r2':1,'r3':2,'r4':3}
             for r,i in rs.iteritems():
-                if rstr_params.has_key(r):
-                    self._r[i] = float(rstr_params[r])/self._report_conversion
+                if restraint_params.has_key(r):
+                    self._r[i] = (float(restraint_params[r]) /
+                                  self._report_conversion)
 
         # Check the relative restraint positions.
         if not self._r[0] <= self._r[1] <= self._r[2] <= self._r[3]:
@@ -343,17 +445,17 @@ class NmroptRestraint(object):
             raise ValueError(msg)
 
         #  A pure harmonic restraint can be set with just k0,
-        if rstr_params.has_key('k0'):
-            k0 = float(rstr_params['k0'])
+        if restraint_params.has_key('k0'):
+            k0 = float(restraint_params['k0'])
             self._rk = [k0,k0]
         # otherwise the two force constants need to be set individually.
         else:
-            if rstr_params.has_key('rk2'):
-                self._rk[0] = float(rstr_params['rk2'])
-            if rstr_params.has_key('rk3'):
-                self._rk[1] = float(rstr_params['rk3'])
+            if restraint_params.has_key('rk2'):
+                self._rk[0] = float(restraint_params['rk2'])
+            if restraint_params.has_key('rk3'):
+                self._rk[1] = float(restraint_params['rk3'])
 
-    def Energy(self, crds):
+    def energy(self, crds):
         """Calculate the restraint energy.
 
         REQUIRED ARGUMENTS:
@@ -362,10 +464,10 @@ class NmroptRestraint(object):
         RETURN VALUES:
         energy - restraint energy (in kcal/mol)
         """
-        energy,gradients = self.EnergyAndGradients(crds)
+        energy,gradients = self.energy_and_gradients(crds)
         return energy
 
-    def EnergyAndGradients(self, crds):
+    def energy_and_gradients(self, crds):
         """
         THIS IS CURRENTLY BROKEN AND RETURNS ALL GRADIENTS AS ZERO!
         
@@ -384,7 +486,7 @@ class NmroptRestraint(object):
             r = float(crds)
             drdx = [ 0. ]
         else:
-            r,drdx = self.CoordAndGradients(crds)
+            r,drdx = self.coord_and_gradients(crds)
         dedr = 0.
         energy = 0.
         # The following is the harmonic, flat-bottomed well described in the
@@ -418,7 +520,7 @@ class NmroptRestraint(object):
         gradients = [ dedr*drdxi for drdxi in drdx ]
         return energy,gradients
 
-    def PrintRestraintReport(self, crds=None, anames=None):
+    def print_restraint_report(self, crds=None, anames=None):
         """
         Print a restraint report in the same format as AMBER output.
         Information not available from a restraint file (e.g. atom names) will
@@ -456,7 +558,7 @@ class NmroptRestraint(object):
                  self._r[3]*self._report_conversion,
                  self._rk[0],self._rk[1]))
         if crds is not None: # Report on any coordinates provided as input.
-            curr = self.Coord(crds)
+            curr = self.coord(crds)
             d_avg = abs(curr - (self._r[1]+self._r[2])/2.)
             min_d = min(abs(curr - self._r[1]),abs(curr - self._r[2]))
             print (' Rcurr: %8.3f  Rcurr-(R2+R3)/2: %8.3f  '
@@ -497,10 +599,10 @@ class NmroptRestraint(object):
 
 
 class BondRestraint(NmroptRestraint):
-    def __init__(self, iat, **rstr_params):
+    def __init__(self, iat, **restraint_params):
         assert len(iat) == 2
         self._report_conversion = 1.
-        NmroptRestraint.__init__(self,iat,**rstr_params)
+        NmroptRestraint.__init__(self,iat,**restraint_params)
 
     def _harmonic_r1(self):
         # Set r1 to be r0 minus a "really big number" (500 in AMBER).
@@ -510,14 +612,14 @@ class BondRestraint(NmroptRestraint):
         # Set r4 to be r0 plus a "really big number"  (500 in AMBER).
         return self._r[1] + 500.
 
-    def Coord(self, crds):
+    def coord(self, crds):
         """Return the restrained bond distance given a 3N coordinate list.
         """
         i = self.iat[0] - 1
         j = self.iat[1] - 1
         return coordinates.Bond(crds,i,j)
 
-    def CoordAndGradients(self, crds):
+    def coord_and_gradients(self, crds):
         """
         Return the restrained bond distance and the gradients along the atom
         cartesian coordinates given a 3N coordinate list.
@@ -534,10 +636,10 @@ class BondRestraint(NmroptRestraint):
 
 
 class AngleRestraint(NmroptRestraint):
-    def __init__(self, iat, **rstr_params):
+    def __init__(self, iat, **restraint_params):
         assert len(iat) == 3
         self._report_conversion = 180./pi
-        NmroptRestraint.__init__(self,iat,**rstr_params)
+        NmroptRestraint.__init__(self,iat,**restraint_params)
                
     def _harmonic_r1(self):
         # Set r1 to be 0 degrees.
@@ -547,7 +649,7 @@ class AngleRestraint(NmroptRestraint):
         # Set r4 to be 180 degrees.
         return 180.
 
-    def Coord(self, crds):
+    def coord(self, crds):
         """Return the restrained angle given a 3N coordinate list.
         """
         i = self.iat[0] - 1
@@ -555,7 +657,7 @@ class AngleRestraint(NmroptRestraint):
         k = self.iat[2] - 1
         return coordinates.Angle(crds,i,j,k)
 
-    def CoordAndGradients(self, crds):
+    def coord_and_gradients(self, crds):
         """
         Return the restrained angle and the gradients along the atom cartesian 
         coordinates given a 3N coordinate list.
@@ -573,10 +675,10 @@ class AngleRestraint(NmroptRestraint):
         return r,drdx
 
 class TorsionRestraint(NmroptRestraint):
-    def __init__(self, iat, **rstr_params):
+    def __init__(self, iat, **restraint_params):
         assert len(iat) == 4
         self._report_conversion = 180./pi
-        NmroptRestraint.__init__(self,iat,**rstr_params)
+        NmroptRestraint.__init__(self,iat,**restraint_params)
 
     def _harmonic_r1(self):
         # Set r1 to be r0 minus 180 degrees.
@@ -586,7 +688,7 @@ class TorsionRestraint(NmroptRestraint):
         # Set r4 to be r0 plus 180 degrees.
         return self._r[1] + 180.
 
-    def Coord(self, crds):
+    def coord(self, crds):
         """Return the restrained torsion given a 3N coordinate list.
         """
         i = self.iat[0] - 1
@@ -596,17 +698,17 @@ class TorsionRestraint(NmroptRestraint):
         r = coordinates.Dihedral(crds,i,j,k,l)
         # Get the closest periodic image/phase.
         rmean = (self._r[1] + self._r[2])/2.
-        isNearestImage = False
-        while not isNearestImage:
+        is_nearest_image = False
+        while not is_nearest_image:
             if r - rmean > pi:
                 r -= 2*pi
             elif rmean - r > pi:
                 r += 2*pi
             else:
-                isNearestImage = True
+                is_nearest_image = True
         return r
 
-    def CoordAndGradients(self, crds):
+    def coord_and_gradients(self, crds):
         """
         Return the restrained torsion and the gradients along the atom 
         cartesian coordinates given a 3N coordinate list.
@@ -626,22 +728,25 @@ class TorsionRestraint(NmroptRestraint):
         drdx[3*l:3*(l+1)] = drdxl
         # Get the closest periodic image/phase.
         rmean = (self._r[1] + self._r[2])/2.
-        isNearestImage = False
-        while not isNearestImage:
+        is_nearest_image = False
+        while not is_nearest_image:
             if r - rmean > pi:
                 r -= 2*pi
             elif rmean - r > pi:
                 r += 2*pi
             else:
-                isNearestImage = True
+                is_nearest_image = True
         return r,drdx
 
 class GenDistCoordRestraint(NmroptRestraint):
-    def __init__(self,iat, rstwt, **rstr_params):
+    def __init__(self,iat, rstwt, **restraint_params):
         assert len(iat)%2 == 0
         self._report_conversion = 1.
-        NmroptRestraint.__init__(self,iat,**rstr_params)
-        self.rstwt = [ float(w) for w in rstwt.split(',') ]
+        NmroptRestraint.__init__(self,iat,**restraint_params)
+        try:
+            self.rstwt = [float(w) for w in rstwt.split(',')]
+        except AttributeError:
+            self.rstwt = rstwt
         if len(self.rstwt) != len(self.iat)/2:
             msg = ('Wrong number of rstwt values provided for %d atom Gen.' 
                    ' Dist. Coord. Expected %d, but got %d.'
@@ -660,7 +765,7 @@ class GenDistCoordRestraint(NmroptRestraint):
         # Add the additional rstwt namelist variable.
         return ' rstwt=%s'%','.join([str(w) for w in self.rstwt])
 
-    def Coord(self, crds):
+    def coord(self, crds):
         """
         Return the restrained generalized distance coordinate given a 3N 
         coordinate list.
@@ -673,7 +778,7 @@ class GenDistCoordRestraint(NmroptRestraint):
             r += self.rstwt[k]*x
         return r
 
-    def CoordAndGradients(self, crds):
+    def coord_and_gradients(self, crds):
         """
         Return the restrained generalized distance coordinate and the gradients
         along the atom cartesian coordinates given a 3N coordinate list.
@@ -694,6 +799,13 @@ class GenDistCoordRestraint(NmroptRestraint):
 
 if __name__ == '__main__':
     import sys
+    import copy
+
+    import amberio.ambertools
+    from amberio.inpcrd import rst7
+    from chemistry.amber.readparm import AmberParm
+    
+
     argc = len(sys.argv)
     print '=== AmberRestraint Test Suite ==='
     if 5 > argc < 2:
@@ -706,65 +818,61 @@ if __name__ == '__main__':
     # Read restraints from a file
     rstFile = sys.argv[1]
     print 'reading AMBER restraint file: %s'%rstFile
-    print '>>> rstTest = ReadAmberRestraintFile(%s)'%rstFile
-    rstTest = ReadAmberRestraintFile(rstFile)
+    print '>>> rstTest = read_amber_restraint(%s)'%rstFile
+    rstTest = read_amber_restraint(rstFile)
 
     # Create an nmropt restraint in pure python
     print 'testing creation of restraints in pure python:'
     print '>>> rstTest.append(BondRestraint((1,2)))'
     print '(makes a dummy restraint between atoms 1 and 2)'
     rstTest.append(BondRestraint((1,2)))
-    print '>>> rstTest[-1].SetRestraintParameters(r0=1.0,k0=10.)'
+    print '>>> rstTest[-1].set_restraint_params(r0=1.0,k0=10.)'
     print '(sets a pure harmonic potential with only 2 parameters)'
-    rstTest[-1].SetRestraintParameters(r0=1.0,k0=10.)
+    rstTest[-1].set_restraint_params(r0=1.0,k0=10.)
 
     # Read crd and parm files if present
     crds = None
     anames = None
     if argc > 2:
-        import amberio.ambertools
-        from chemistry.amber.readparm import rst7
         crdFile = sys.argv[2]
         print 'Reading coordinates from file: %s'%crdFile
         crds = rst7(crdFile).coords
     if argc > 3:
-        from chemistry.amber.readparm import AmberParm
         prmFile = sys.argv[3]
         print 'Reading parm info from file: %s'%prmFile
         anames = AmberParm(prmFile).parm_data['ATOM_NAME']
 
     # Print a report of the restraints so far
     print 'printing an AMBER-style report:'
-    print '>>> rstTest.PrintRestraintReport(crds,anames)'
-    rstTest.PrintRestraintReport(crds,anames)
+    print '>>> rstTest.print_restraint_report(crds,anames)'
+    rstTest.print_restraint_report(crds,anames)
     
     if crds is not None:
         # Print a report like those found after MD steps
         print '\nprinting an AMBER-style restraint energy decomposition:'
-        print '>>> rstTest.PrintRestraintEnergyReport(crds)'
-        rstTest.PrintRestraintEnergyReport(crds)
+        print '>>> rstTest.print_restraint_energy_report(crds)'
+        rstTest.print_restraint_energy_report(crds)
 
         # Test the total energy and forces against an AMBER forcedump.dat
         print '\ncalculating total restraint energy and forces:'
-        print '>>> energy,gradients = rstTest.EnergyAndGradients(crds)'
-        e,g = rstTest.EnergyAndGradients(crds)
+        print '>>> energy,gradients = rstTest.energy_and_gradients(crds)'
+        e,g = rstTest.energy_and_gradients(crds)
         print 'RESTRAINT  = %12.4f'%e
         print 'Forces (same format as forcedump.dat)'
         for i in range(0,len(g),3):
             print ' % 18.16e % 18.16e % 18.16e'%(-g[i+0],-g[i+1],-g[i+2])
     print '\nwriting a new restraint file to stdout:'
-    print '>>> rstTest.WriteAmberRestraintFile(sys.stdout)'
-    rstTest.WriteAmberRestraintFile(sys.stdout)
+    print '>>> rstTest.write_amber_rstraint_file(sys.stdout)'
+    rstTest.write_amber_rstraint_file(sys.stdout)
 
-    import copy
     print '\nmaking a test copy and modifying it for test comparison'
     print '>>> rstTest2 = copy(rstTest)'
     rstTest2 = copy.deepcopy(rstTest)
     r0 = rstTest[0]._r[1] + 1.
     k0 = rstTest[0]._rk[0] + 10.
-    print '>>> rstTest2.SetRestraintParameters(r0=[%f],k0=[%f])'%(r0,k0)
-    rstTest2.SetRestraintParameters(r0=[r0],k0=[k0])
-    rstTest2.PrintRestraintReport()
+    print '>>> rstTest2.set_restraint_params(r0=[%f],k0=[%f])'%(r0,k0)
+    rstTest2.set_restraint_params(r0=[r0],k0=[k0])
+    rstTest2.print_restraint_report()
     print '>>> rstTest == rstTest2'
     print rstTest == rstTest2
     print '>>> rstTest != rstTest2'

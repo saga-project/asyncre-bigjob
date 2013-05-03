@@ -110,7 +110,7 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         umbrella.print_restraint_report(crds)
         umbrella.print_restraint_energy_report(crds)
   
-    def _computeSwapMatrix_OLD(self, replicas, states):
+    def _computeSwapMatrix(self, replicas, states):
         """
         Compute the swap matrix U = (u_ij), where u_ij = u_i(x_j)
        
@@ -134,10 +134,10 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
                 U[sid_j][repl_i] = self.beta*u_ji
         return U
 
-    def _computeSwapMatrix(self, replicas, states):
-        U_old = self._computeSwapMatrix_OLD(replicas,states)
-        U_new = pj_amber_job._computeSwapMatrix(self,replicas,states)
-        return U_new,U_old
+#    def _computeSwapMatrix(self, replicas, states):
+#        U_old = self._computeSwapMatrix_OLD(replicas,states)
+#        U_new = pj_amber_job._computeSwapMatrix(self,replicas,states)
+#        return U_new,U_old
 
     def _reduced_energy(self, state_i, repl_j):
         """
