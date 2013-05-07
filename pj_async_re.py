@@ -111,6 +111,20 @@ class async_re_job:
             self.spmd = self.keywords.get('SPMD')
         # number of replicas (may be determined by other means)
         self.nreplicas = None
+
+        #examine RESOURCE_URL to see if it's remote (file staging)
+        self.remote = self._check_remote_resource(self.keywords.get('RESOURCE_URL'))
+        if self.remote:
+            print "Use remote execution and file staging"
+            if self.keywords.get('REMOTE_WORKING_DIR') is None:
+                self._exit("REMOTE_WORKING_DIR needs to be specified")
+            if self.keywords.get('REMOTE_DATA_SERVICE') is None: #something like ssh://<user>@<machine>/<datadir>
+                self._exit("REMOTE_DATA_SERVICE needs to be specified")
+            if self.keywords.get('REMOTE_DATA_SIZE') is None:
+                self.remote_data_size = 2048 # 2GB by default
+            else:
+                self.remote_data_size = self.keywords.get('REMOTE_DATA_SIZE')
+
         if self.keywords.get('NREPLICAS') is not None:
             self.nreplicas = int(self.keywords.get('NREPLICAS'))
         # extfiles variable for 'setupJob'
@@ -186,6 +200,9 @@ class async_re_job:
         else:
             self._read_status()
             self.updateStatus(restart=True)
+
+        if self.remote:
+            self._setup_remote_workdir()
 
         self.print_status()
         #at this point all replicas should be in wait state
@@ -494,3 +511,42 @@ class async_re_job:
 
         print 'Exiting doExchanges Method: '+time.time()
 
+    def _check_remote_resource(self, resource_url):
+        """
+check if it's a remote resource. Basically see if 'ssh' is present
+"""
+        ssh_c = re.compile("(.+)\+ssh://(.*)")
+        m = re.match(ssh_c, resource_url)
+        if m:
+            self.remote_protocol = m.group(1)
+            self.remote_server = m.group(2)
+            print resource_url + " : yes" + " " + remote_protocol + " " + remote_server
+            return 1
+        else:
+            print resource_url + " : no"
+            return 0
+
+    def _setup_remote_workdir(self):
+        """
+rsync local working directory with remote working directory
+"""
+        os.system("ssh %s mkdir -p %s" % (self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
+        extfiles = " "
+        for efile in self.extfiles:
+            extfiles = extfiles + " " + efile
+        os.system("rsync -av %s %s/%s/" % (extfiles, self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
+
+        dirs = ""
+        for k in range(self.nreplicas):
+            dirs = dirs + " r%d" % k
+        setup_script = """
+cd %s ; \
+for i in `seq 0 %d` ; do \
+mkdir -p r$i ; \
+ 
+
+
+
+
+"""
+        
