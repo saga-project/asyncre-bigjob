@@ -549,7 +549,7 @@ Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
             U = self._computeSwapMatrix(replicas_waiting, states_waiting)
 
             # perform an exchange for each of the n replicas, m times
-            # (m=1 by default)
+            # (m=1 by default, set to ~1000 for debugging, see below)
             mreps = 1
             for reps in range(mreps):
 
@@ -563,8 +563,9 @@ Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
                         self.status[repl_i]['stateid_current'] = sid_j
                         self.status[repl_j]['stateid_current'] = sid_i
 
-# To debug Gibbs sampling, actual and computed populations of 
-# state permutations should match 
+# Uncomment to debug Gibbs sampling: actual and computed populations of 
+# state permutations should match
+# 
 #                self._debug_collect_state_populations(replicas_waiting,U)
 #
 #            self._debug_validate_state_populations(replicas_waiting,U)
