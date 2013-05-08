@@ -4,7 +4,7 @@ See documentation in doc/ directory.
 
 Contributors: 
 
-Emilio Gallicchio <emilio.gallicchio@rutgers.edu>
+Emilio Gallicchio <emilio@biomaps.rutgers.edu>
 Brian Radak <radakb@biomaps.rutgers.edu>
 Melissa Romanus <melissa.romanus@rutgers.edu>
 """
@@ -13,6 +13,8 @@ import sys
 import time
 import pickle
 import random
+import copy
+from numpy import *
 
 from configobj import ConfigObj
 #pilotjob: Packages for Pilot API
@@ -113,17 +115,17 @@ class async_re_job:
         self.nreplicas = None
 
         #examine RESOURCE_URL to see if it's remote (file staging)
-        self.remote = self._check_remote_resource(self.keywords.get('RESOURCE_URL'))
-        if self.remote:
-            print "Use remote execution and file staging"
-            if self.keywords.get('REMOTE_WORKING_DIR') is None:
-                self._exit("REMOTE_WORKING_DIR needs to be specified")
-            if self.keywords.get('REMOTE_DATA_SERVICE') is None: #something like ssh://<user>@<machine>/<datadir>
-                self._exit("REMOTE_DATA_SERVICE needs to be specified")
-            if self.keywords.get('REMOTE_DATA_SIZE') is None:
-                self.remote_data_size = 2048 # 2GB by default
-            else:
-                self.remote_data_size = self.keywords.get('REMOTE_DATA_SIZE')
+#        self.remote = self._check_remote_resource(self.keywords.get('RESOURCE_URL'))
+#        if self.remote:
+#            print "Use remote execution and file staging"
+#            if self.keywords.get('REMOTE_WORKING_DIR') is None:
+#                self._exit("REMOTE_WORKING_DIR needs to be specified")
+#            if self.keywords.get('REMOTE_DATA_SERVICE') is None: #something like ssh://<user>@<machine>/<datadir>
+#                self._exit("REMOTE_DATA_SERVICE needs to be specified")
+#            if self.keywords.get('REMOTE_DATA_SIZE') is None:
+#                self.remote_data_size = 2048 # 2GB by default
+#            else:
+#                self.remote_data_size = self.keywords.get('REMOTE_DATA_SIZE')
 
         if self.keywords.get('NREPLICAS') is not None:
             self.nreplicas = int(self.keywords.get('NREPLICAS'))
@@ -201,8 +203,8 @@ class async_re_job:
             self._read_status()
             self.updateStatus(restart=True)
 
-        if self.remote:
-            self._setup_remote_workdir()
+#        if self.remote:
+#            self._setup_remote_workdir()
 
         self.print_status()
         #at this point all replicas should be in wait state
@@ -472,44 +474,111 @@ class async_re_job:
                     self._launchReplica(k,self.status[k]['cycle_current']))
                 self.status[k]['running_status'] = 'R'
 
+# gives random choice from a set with weight probabilities
+    def _weighted_choice_sub(self,weights):
+        rnd = random.random() * sum(weights)
+        for i, w in enumerate(weights):
+            rnd -= w
+            if rnd < 0:
+                return i
+                
+    def _gibbs_re_j(self,repl_i,replicas_waiting, U):
+        # produces a replica "j" to exchange with the given replica "i"
+        # based off independence sampling of the discrete distribution
+        #
+        # Pswapij = exp(-duij) / sum(exp(-duij))
+
+#        re_etot = 0
+        n = len(replicas_waiting)
+
+        #replica energies in their current state
+        ee = []
+        for repl in replicas_waiting:
+            sid = self.status[repl]['stateid_current'] 
+            ee.append(U[sid][repl])
+            #energy of "pivot" replica
+            if repl == repl_i:
+                ei = U[sid][repl]
+#            re_etot += U[sid][repl]]
+
+        #evaluate all i-j swap probabilities
+        ps = zeros(n)
+        sid_i = self.status[repl_i]['stateid_current'] 
+        for j in range(n):
+            repl_j = replicas_waiting[j]
+            sid_j = self.status[repl_j]['stateid_current'] 
+            # energy after (i,j) exchange
+            eij = U[sid_i][repl_j] + U[sid_j][repl_i]
+            # ei+ee[j] is the original energy
+            # also, note that total energy is not included, since it is the same for all of the
+            # permutation states.
+            ps[j] = -(eij - ei - ee[j])
+#        ps.append(math.exp(-(eij - ei - ee[j])))
+        ps = exp(ps)
+        #index of swap replica within replicas_waiting list
+        j = self._weighted_choice_sub(ps)
+        #actual replica
+        repl_j = replicas_waiting[j]
+        return repl_j
+
     def doExchanges(self):
         """
-        Randomly selects a pair of replicas in wait state for exchange of 
-        thermodynamic parameters. 
-        """
-        print "Entering doExchanges Method: "+time.time()
+Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
+"""
+        print "Entering doExchanges Method: %f" % time.time()
+
         # find out which replicas are waiting
         self._update_running_no()
         if self.waiting > 1:
-            replicas_waiting = [k for k in range(self.nreplicas)
-                                if (self.status[k]['running_status'] == 'W' and 
-                                    self.status[k]['cycle_current'] > 1)]
-            random.shuffle(replicas_waiting)
-            #  perform exchanges in pairs
-            for k in range(0,len(replicas_waiting)-1,2):
-                repl_a = replicas_waiting[k]
-                repl_b = replicas_waiting[k+1]
-                """
-                1. Places the two replicas in "E" (exchanging state)
-                2. rewinds the cycle to the previous completed cycle
-                3. performs the exchange by calling exchange routine from 
-                specialized modules.
-                4. Creates new input file for the next cycle
-                5. Places replicas back into "W" (wait) state 
-                """
-                self.status[repl_a]['running_status'] = 'E'
-                self.status[repl_b]['running_status'] = 'E'
-                self.status[repl_a]['cycle_current'] -= 1
-                self.status[repl_b]['cycle_current'] -= 1
-                self._doExchange_pair(repl_a,repl_b)
-                self.status[repl_a]['cycle_current'] += 1
-                self.status[repl_b]['cycle_current'] += 1
-                self._buildInpFile(repl_a)
-                self._buildInpFile(repl_b)
-                self.status[repl_a]['running_status'] = 'W'
-                self.status[repl_b]['running_status'] = 'W'
 
-        print 'Exiting doExchanges Method: '+time.time()
+            replicas_waiting = []
+            states_waiting = []
+            for k in range(self.nreplicas):
+                if self.status[k]['running_status'] == "W" and self.status[k]['cycle_current'] > 1:
+                    replicas_waiting.append(k)
+                    states_waiting.append(self.status[k]['stateid_current'] )
+
+            # backtrack cycle
+            for k in replicas_waiting:
+                self.status[k]['cycle_current'] -= 1
+                self.status[k]['running_status'] = "E"
+
+            #Matrix of replica energies in each state.
+            #The computeSwapMatrix() function is defined by application 
+            #classes (Amber/US, Impact/BEDAM, etc.)
+            U = self._computeSwapMatrix(replicas_waiting, states_waiting)
+
+            # perform an exchange for each of the n replicas, m times
+            # (m=1 by default)
+            mreps = 1
+            for reps in range(mreps):
+
+                for repl_i in replicas_waiting:
+                    repl_j = self._gibbs_re_j(repl_i, replicas_waiting, U)
+                    if repl_j != repl_i:
+                        #Swap state id's
+                        #Note that the energy matrix does not change
+                        sid_i = self.status[repl_i]['stateid_current'] 
+                        sid_j = self.status[repl_j]['stateid_current']
+                        self.status[repl_i]['stateid_current'] = sid_j
+                        self.status[repl_j]['stateid_current'] = sid_i
+
+# To debug Gibbs sampling, actual and computed populations of 
+# state permutations should match 
+#                self._debug_collect_state_populations(replicas_waiting,U)
+#
+#            self._debug_validate_state_populations(replicas_waiting,U)
+
+            # write input files
+            for k in replicas_waiting:
+                # Creates new input file for the next cycle
+                # Places replica back into "W" (wait) state 
+                self.status[k]['cycle_current'] += 1
+                self._buildInpFile(k)
+                self.status[k]['running_status'] = "W"
+
+        print 'Exiting doExchanges Method: %f' % time.time()
+
 
     def _check_remote_resource(self, resource_url):
         """
@@ -549,4 +618,61 @@ mkdir -p r$i ; \
 
 
 """
-        
+      
+    def _debug_collect_state_populations(self, replicas, U):
+        try:
+            self.npermt
+        except:
+            self.npermt = {}
+  
+        try:
+            self.permt
+        except:
+            self.permt = {}
+
+        #state id list
+        sids = [ self.status[k]['stateid_current'] for k in replicas]
+
+        try:
+            self=perme0            
+        except:
+            e = 0
+            i = 0
+            for repl in replicas:
+                e += U[sids[i]][repl]
+                i += 1
+            self.perme0 = e
+
+        key = str(sids)
+        if self.npermt.has_key(key):
+            self.npermt[key] += 1
+        else:
+            self.npermt[key] = 1
+            self.permt[key] = sids[:]
+
+    def _debug_validate_state_populations(self, replicas, U):
+        ss = 0
+        for k in self.npermt.keys():
+            ss += self.npermt[k]
+        ps = []
+        sumps = 0
+        for k in self.npermt.keys():
+            sids = self.permt[k]
+            e = 0
+            i = 0
+            for repl in replicas:
+                e += U[sids[i]][repl]
+                i += 1
+            p = math.exp(-(e-self.perme0))
+            ps.append(p)
+            sumps += p
+
+        i = 0
+        for k in self.npermt.keys():
+            print k, self.npermt[k]/float(ss), ps[i]/sumps
+            i += 1
+
+        sys.exit(0)
+
+            
+            
