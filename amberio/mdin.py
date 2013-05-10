@@ -1,62 +1,56 @@
 """
-FILE: mdin.py - plugin for I/O of AMBER mdin files
+Plugin for I/O of AMBER mdin files
 
-DESCRIPTION: This module creates objects from AMBER mdin files. The objects are
-essentially collections of Fortran namelists that also have knowledge of the
-default values expected by AMBER (depending on the MD engine being used).
+This module provides a class for AMBER mdin files. AmberMdin objects
+essentially collections of Fortran namelists that also have knowledge of
+the default values expected by AMBER (depending on the MD engine being 
+used).
 
-AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
+References: 
+    AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
+    MMPBSA.py source code: ambermd.org/AmberTools-get.html
 
-REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
-            MMPBSA.py source code: ambermd.org/AmberTools-get.html
+Exported Classes:
+    AmberNamelist A Namelist (see the namelist module) with default 
+                  values dependent on the specified MD engine.
+    AmberMdin     A list of AmberNamelists
+
 """
-import sys
-
 from namelist import *
 
-__all__ = ['read_amber_mdin','AmberMdin']
+__author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
+
+__all__ = ['read_amber_mdin','AmberMdin','AmberNamelist']
 
 def read_amber_mdin(mdin_name, engine='sander'):
-    """Read an AMBER mdin file and return an AmberMdin object.
-    """
+    """Read an AMBER mdin file and return an AmberMdin object."""
+    #     Separate the namelists as a NamelistCollection and convert to a list
+    # of AmberNamelists (with assigned defaults). Parse the remaining lines for
+    # title information and NMR variables (a NoneType AmberNamelist).
     namelists,other_lines = separate_namelists(mdin_name)
+    namelists = [AmberNamelist(nl.name,engine,**nl) for nl in namelists] 
     title = ''
-    nmr_vars_are_present = False
+    nmr_vars = AmberNamelist(None,engine)
     for line in other_lines:
         tokens = line.split('=')
         if len(tokens) > 1:
-            # If '=' is present, assign the rhs value to the lhs variable.
-            variable = tokens[0].strip()
-            value = tokens[1].strip()
-            if not nmr_vars_are_present:
-                # Create a new namelist with name = None.
-                nmr_vars_are_present = True
-                namelists.append(AmberNamelist(None,engine))
-                namelists.first_match(None)[variable] = value
-            else:
-                # Add a new variable to the nmr (None) namelist.
-                namelists.first_match(None)[variable] = value
+            nmr_vars[tokens[0].strip()] = tokens[1].strip()
         else:
-            # Otherwise, append the line to the title.
-            title += line + '\n'
-    return AmberMdin(namelists,title,engine)
+            title += line.strip() + '\n'
+    namelists.append(nmr_vars)
+    return AmberMdin(title,engine,*namelists)
 
 
-class AmberMdin(object):
+class AmberMdin(NamelistCollection):
     """
-    An AmberMdin object provides easy access to the data in an AMBER mdin file.
-    The main attribute is a NamelistCollection of the currently defined 
-    namelists. For potentially non-obvious reasons, it is best to "get" and 
-    "set" the variables in each namelist with the provided functions. 
+    List of AmberNamelist objects providing easy access to the data in an
+    AMBER mdin file.
     """
-    def __init__(self, namelists, title='', engine='sander'):
-        if isinstance(namelists,NamelistCollection):
-            self.namelists = namelists
-        else:
-            raise Exception('Could not find AmberNamelists!')
+    def __init__(self, title='', engine='sander', *amber_nls):
+        NamelistCollection.__init__(self,*amber_nls)
         self.title = str(title)
         self.engine = str(engine)
-
+        
     def __str__(self):
         # Format mdin file output as follows:
         # 1 - title lines
@@ -65,36 +59,42 @@ class AmberMdin(object):
         # 4 - variables that belong to no namelist (e.g. DISANG)
         #
         txt = '%s\n'%self.title.rstrip()
-        for nl in self.namelists.does_not_match('wt',None):
+        for nl in self.does_not_match('wt',None):
             txt += str(nl)
         end_txt = ''
-        for nl in self.namelists.matches('wt'):
+        for nl in self.matches('wt'):
             if "%s"%str(nl['type']).upper() != "'END'":
                 txt += str(nl)
             else:
                 end_txt = str(nl) 
         txt += end_txt
-        if self.namelists.first_match(None) is not None:
-            txt += str(self.namelists.first_match(None))
+        if self.first_match(None) is not None:
+            txt += str(self.first_match(None))
         return txt
 
     def __setattr__(self, name, value):
         object.__setattr__(self,name,value)
         if name == 'engine':
-            for namelist in self.namelists:
+            for namelist in self:
                 namelist.engine = self.engine
 
+    def append(self, item):
+        if not isinstance(item,AmberNamelist):
+            raise TypeError('AmberMdin objects must contain AmberNamelists!')
+        if hasattr(self,'engine'):
+            item.engine = self.engine
+        NamelistCollection.append(self,item)
+
     def namelist_value(self, variable, namelist, wt_type=None):
-        """
-        Get the value of a variable from a given namelist. 
+        """Return the value of a variable from a given namelist. 
         
         Notes:
         - NMR variables belong to a namelist with name None.
-        - wt namelists need an additional identifier for the 'type' attribute.
+        - &wt namelists need a 'type' for unique determination.
         - Unset variables with no default will return as None.
         - String values require double literals (e.g. 'str' --> "'str'").
         """
-        for nl in self.namelists.matches(namelist):
+        for nl in self.matches(namelist):
             if nl.has_key(variable):
                 # Most namelists are uniquely defined by their name.
                 if wt_type is None:
@@ -102,16 +102,6 @@ class AmberMdin(object):
                 # There may be multiple wt namelists with different type's
                 elif nl['type'] == wt_type:
                     return nl[variable]
-        # If there's no match, return the default
-        # NB: wt namelists have no default (return None)
-        if wt_type is None:
-            nl = self.namelists.first_match(namelist)
-            if nl is not None:
-                return nl.defaults[variable]
-            else:
-                return None
-        raise ValueError('No such variable %s in namelist %s'
-                         %(variable,namelist))
 
     def set_namelist_value(self, variable, value, namelist, wt_type=None):
         """
@@ -120,18 +110,18 @@ class AmberMdin(object):
         
         Notes:
         - NMR variables belong to a namelist with name None.
-        - wt namelists need an additional identifier for the 'type' attribute.
+        - wt namelists need an additional identifier for the 'type' 
+          attribute.
         - String values require double literals (e.g. 'str' --> "'str'").
         """
-        for nl in self.namelists.matches(namelist):
+        for nl in self.matches(namelist):
             if wt_type is None or nl['type'] == wt_type:
                 nl[variable] = value
                 return 1
         # If the namelist of this variable does not exist, it must be made.
-        self.namelists.append(AmberNamelist(namelist,self.engine,
-                                            {variable:value}))
+        self.append(AmberNamelist(namelist,self.engine,**{variable:value}))
         if wt_type is not None: 
-            self.namelists[-1]['type'] = wt_type
+            self[-1]['type'] = wt_type
             return 1
         return 0
 
@@ -151,13 +141,13 @@ class AmberMdin(object):
      
 class AmberNamelist(Namelist):
     """
-    An AmberNamelist is simply a Fortran namelist that also has defaults 
-    specific to the MD engine (sander by default). Rather than always deal with
-    very large namelists, only the variable keys that differ from the defaults 
-    can also be returned.
+    An AmberNamelist is simply a Fortran namelist that also has defaults
+    specific to the MD engine.
     """
     def __init__(self, name, engine, *args, **kwargs):
-        Namelist.__init__(self,name,*args,**kwargs)
+        Namelist.__init__(self,name,line_prefix=' ',name_value_separator=' = ',
+                          value_separator=', ',max_namevalues_per_line=72,
+                          max_chars_per_line=72,*args,**kwargs)
         self.engine = engine
 
     def __setattr__(self, name, value):
@@ -166,24 +156,25 @@ class AmberNamelist(Namelist):
             self._set_defaults()
     
     def __str__(self):
-        # Modify print behavior for the NoneType namelist.
-        if self.name is None:
-            txt = ''
-            for name,value in self.iteritems():
-                txt += ' %s=%s\n'%(name,value)
-            return txt
+        if self.name is not None:
+            # Print only the the non-default values using normal formatting for
+            # a Namelist string.
+            return Namelist.__str__(Namelist(self.name,**self.non_defaults()))
         else:
-            return Namelist.__str__(self)
-
-    def nondefaults(self):
-        """Return keys only for variables that differ from the default value.
+            # Modify the Namelist print behavior for the NoneType namelist.
+            # Namely, don't print the "&name" section and ending slash.
+            return '\n'.join([' %s=%s'%(k,v) 
+                              for k,v in self.non_defaults().iteritems()])
+ 
+    def non_defaults(self):
         """
-        return (k for k,v in self.iteritems() 
-                if self.defaults.has_key(k) and v != self.defaults[k])
+        Return a dict containing only name/value combinations that differ
+        from the default values.
+        """
+        return dict((k,v) for k,v in self.iteritems() if v != self.defaults[k])
 
     def _set_defaults(self):
-        """Set the default variables for the current MD engine (e.g. sander).
-        """
+        """Set the default variables for the MD engine (e.g. sander)."""
         sander_defaults = {
             'debug': {
                 'do_debugf': 0, 'dumpfrc': 0, 
@@ -371,10 +362,15 @@ class AmberNamelist(Namelist):
             elif self.engine in ['pmemd','pmemd.MPI']:  
                 self.defaults = pmemd_defaults[self.name]
             else: 
-                msg = 'Can\'t set defaults for unknown engine %s'%self.engine
-                raise ValueError(msg)
+                raise ValueError('Unable to set defaults for unknown engine %s'
+                                 %self.engine)
         else:
             raise ValueError('Unrecognized AMBER mdin namelist: %s'%self.name)
+
+        # Fill in missing values with the new default values.
+        for k,v in self.defaults.iteritems():
+            if not self.has_key(k):
+                self[k] = v
 
 if __name__ == '__main__':
     import sys
@@ -420,11 +416,8 @@ if __name__ == '__main__':
     try:
         print '>>> mdin_obj = read_amber_mdin(%s)'%test_name
         mdin_obj = read_amber_mdin(test_name)
-        print '>>> print str(mdin_obj),'
-        print '=== mdin object contents:'
-        print mdin_obj,
-        print '========================='
+        print '>>> print mdin_obj'
+        print mdin_obj
     finally:
         if clean:
-            print 'Cleaning up %s'%test_name
             os.remove(test_name)

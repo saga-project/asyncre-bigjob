@@ -1,14 +1,13 @@
 """                                                                             
-FILE: rstr.py - plugin for AMBER nmropt style restraint files
+Plugin for AMBER nmropt style restraint files
 
-DESCRIPTION: This module provides a convenient implementation of restraints
-in AMBER for use in Python. This is useful, for example, if one wants to
-determine just the restraint energy of a set of coordinates without
-running a full energy evaluation in AMBER.
+This module provides a convenient implementation of restraints in AMBER 
+for use in Python. This is useful, for example, if one wants to determine
+just the restraint energy of a set of coordinates without running a full
+energy evaluation in AMBER.
 
-AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
-
-REFERENCES: AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
+References:
+    AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
 """
 import sys
 from math import pi
@@ -18,19 +17,15 @@ import re
 import coordinates
 from namelist import read_namelists
 
+__author__ = 'Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>'
+
 __all__ = ['read_amber_restraint','AmberRestraint','NmroptRestraint']
 
 
 def read_amber_restraint(rst_name):
     """
-    Read an AMBER restraint file (usually file extension RST) and return an
-    AmberRestraint object containing each restraint found therein.
-
-    REQUIRED ARGUMENTS:
-    rst_name - file containing AMBER "&rst" namelists
-
-    RETURN VALUES:
-    restraint - AmberRestraint object (list of NmroptRestraint)
+    Read an AMBER restraint file (usually file extension RST) and return
+    an AmberRestraint object containing each restraint found therein.
     """
     restraint = AmberRestraint()
     # Read the namelists from the restraint file and look for &rst namelists
@@ -59,8 +54,7 @@ def read_amber_restraint(rst_name):
     return restraint
 
 def _extract_restraint_params_from_mdout(mdout_name):
-    """Extract the restraint parameters from the report in an mdout file.
-    """
+    """Extract the restraint parameters from the report in an mdout file."""
     iat1_pattern = "(\([ 0-9]+?\))" # pattern for atom 1
     iat1p_pattern = "(\([ 0-9]+?\))*?" # pattern for atoms 1+
     iat_pattern = ("^.*?%s.*?%s[^\)\(]*?%s[^\)\(]*?%s[^\)\(]*$"
@@ -101,23 +95,20 @@ def _extract_restraint_params_from_mdout(mdout_name):
 
 def read_amber_restraint_from_mdout(mdout_name, rstwt=None):
     """
-    Read an AMBER mdout file and return an AmberRestraint object containing 
-    each restraint found therein. 
+    Read an AMBER mdout file and return an AmberRestraint object 
+    containing each restraint found therein. 
 
-    This information is only present if the variable LISTIN=POUT was set. It is
-    also incomplete with respect to generalized distance coordiantes, as no
-    rstwt data is reported. WARNING! such restraints will be identified 
-    incorrectly unless that information is provided in the 'rstwt' argument.
+    Note:
+    An mdout file only contains the information necessary to do this if
+    the variable LISTIN=POUT was set. Even so, this will always be 
+    incomplete with respect to generalized distance coordiantes, as no
+    rstwt data is reported. Such restraints will be identified 
+    incorrectly unless that information is provided with the 'rstwt' 
+    argument.
 
-    REQUIRED ARGUMENTS:
-    mdout_name - AMBER mdout file
-
-    OPTIONAL ARGUMENTS:
-    rstwt - If not None, a sequence of rstwts to be assigned to the restraints
-    in order.
-
-    RETURN VALUES:
-    restraint - AmberRestraint object (list of NmroptRestraint)
+    If 'rstwt' is not None, a sequence of rstwts is expected and will be 
+    assigned to the restraints in order.
+    
     """
     restraint_params = _extract_restraint_params_from_mdout(mdout_name)
    
@@ -155,10 +146,10 @@ def read_amber_restraint_from_mdout(mdout_name, rstwt=None):
 
 
 class AmberRestraint(list):
-    """
-    A collection (list) of NmroptRestraints defining an AMBER restraint energy.
-
+    """A list of NmroptRestraints defining an AMBER restraint energy.
+  
     (See NmroptRestraint for further details.)
+    
     """
     def __init__(self, *restraints):
         list.__init__(self)
@@ -348,27 +339,29 @@ class AmberRestraint(list):
 
 class NmroptRestraint(object):
     """
-    A restraint object like that in the AMBER nmropt module. The restraint form
-    is a harmonic flat-bottom well with six parameters: four positions (r1-r4) 
-    and two force constants (rk2 and rk3).
+    A restraint object like that in the AMBER nmropt module. The 
+    restraint form is a harmonic flat-bottom well with six parameters: 
+    four positions (r1-r4) and two force constants (rk2 and rk3).
 
     From the AMBER 12 Manual (section 6.1.1 p. 204):
     ---
-    the restraint is a well with a square bottom with parabolic sides out to a 
-    defined distance, and then linear sides beyond that. If R is the value of 
-    the restraint in question:
+    the restraint is a well with a square bottom with parabolic sides out
+    to a defined distance, and then linear sides beyond that. If R is the
+    value of the restraint in question:
 
-    -R<r1 Linear, with the slope of the "left-hand" parabola at the point R=r1
-    -r1<=R<r2 Parabolic, with restraint energy k2(R-r2)^2
-    -r2<=R<r3 E = 0
-    -r3<=R<r4 Parabolic with restraint energy k3(R-r3)^2
-    -r4<=R Linear, with the slope of the "right-hand" parabola at the point R=r4
+    - R < r1       Linear, with the slope of the "left-hand" parabola at 
+                   the point R = r1
+    - r1 <= R < r2 Parabolic, with restraint energy k2(R-r2)^2
+    - r2 <= R < r3 E = 0
+    - r3 <= R < r4 Parabolic with restraint energy k3(R-r3)^2
+    - r4 <= R      Linear, with the slope of the "right-hand" parabola at
+                   the point R=r4
     ----
-
-    Frequently one only desires a purely harmonic well, in which case r1 << r2,
-    r2=r3, r3 << r4, and rk2 = rk3. These defaults can be obtained by only
-    specifying r0 and k0 (as in sander from AMBER 10 onward).
-
+    Frequently one only desires a purely harmonic well, in which case 
+    r1 << r2, r2=r3, r3 << r4, and rk2 = rk3. These defaults can be 
+    obtained by only specifying r0 and k0 (as in sander from AMBER 10 
+    onward).
+    
     REQUIRED ARGUMENTS:
     iat - list of atom indices defining the restraint
 
@@ -863,7 +856,7 @@ if __name__ == '__main__':
             print ' % 18.16e % 18.16e % 18.16e'%(-g[i+0],-g[i+1],-g[i+2])
     print '\nwriting a new restraint file to stdout:'
     print '>>> rstTest.write_amber_rstraint_file(sys.stdout)'
-    rstTest.write_amber_rstraint_file(sys.stdout)
+    rstTest.write_amber_restraint_file(sys.stdout)
 
     print '\nmaking a test copy and modifying it for test comparison'
     print '>>> rstTest2 = copy(rstTest)'

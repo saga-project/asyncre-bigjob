@@ -1,8 +1,6 @@
 """
-FILE: ambertools.py - header to quickly check for and load Python libraries 
-included with AmberTools (12 and later)
+Load Python libraries included with AmberTools (12 and later)
 
-AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
 """
 import os
 import sys
@@ -27,5 +25,7 @@ JPKC      = 4184                     # Joules per kcal
 KB        = BOLTZMANN*AVOGADRO/JPKC  # in kcal/mol-K
 # from src/sander/runmd.F90:
 BARKC     = 1.6604345e4*4.184        # converts kcal/mol to bar?
+
+__author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
 
 __all__ = ['AMBERHOME','KB','AmberMdout','rst7']

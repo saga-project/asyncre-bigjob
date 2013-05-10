@@ -1,11 +1,10 @@
 """                                                                           
-FILE: coordinates.py - Pure Python routines for analyzing atom coordinates.
+Pure Python routines for analyzing atom coordinates.
 
-DESCRIPTION:
-
-AUTHOR: Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
 """
 from math import sqrt,acos,pi
+
+__author__ = 'Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>'
 
 __all__ = ['Bond','BondAndGradients','Angle','AngleAndGradients',
            'Dihedral','DihedralAndGradients']

@@ -14,15 +14,15 @@ import time
 import pickle
 import random
 import copy
-from numpy import *
 
+from numpy import *
 from configobj import ConfigObj
-#pilotjob: Packages for Pilot API
+
 from pilot import PilotComputeService, ComputeDataService, State
 
 __version__ = '0.1.0'
 
-class async_re_job:
+class async_re_job(object):
     """
     Class to set up and run asynchronous file-based RE calculations
     """
@@ -33,6 +33,31 @@ class async_re_job:
         self._parseInputFile()
         self._checkInput()
         self._printStatus()
+
+    def __getattr__(self, name):
+        if name == 'replicas_waiting':
+            # Return a list of replica indices of replicas in a wait state.
+            self.updateStatus()
+            return [k for k in range(self.nreplicas) 
+                    if self.status[k]['running_status'] == 'W']
+        elif name == 'states_waiting':
+            # Return a list of state ids of replicas in a wait state.
+            return [self.status[k]['stateid_current'] 
+                    for k in self.replicas_waiting]
+        elif name == 'replicas_waiting_to_exchange':
+            # Return a list of replica indices of replicas in a wait state that
+            # have ALSO completed at least one cycle.
+            self.updateStatus()
+            return [k for k in range(self.nreplicas) 
+                    if (self.status[k]['running_status'] == 'W' and
+                        self.status[k]['cycle_current'] > 1)]
+        elif name == 'states_waiting_to_exchange':
+            # Return a list of state ids of replicas in a wait state that have 
+            # ALSO completed at least one cycle.
+            return [self.status[k]['stateid_current'] 
+                    for k in self.replicas_waiting_to_exchange]
+        else:
+            object.__getattr__(self,name)
 
     def _error(self, text):
         """Print and flush an error message to stdout."""
@@ -113,6 +138,10 @@ class async_re_job:
             self.spmd = self.keywords.get('SPMD')
         # number of replicas (may be determined by other means)
         self.nreplicas = None
+        
+        self.nexchg_rounds = 1
+        if self.keywords.get('NEXCHG_ROUNDS') is not None:
+            self.nexchg_rounds = int(self.keywords.get('NEXCHG_ROUNDS'))
 
         #examine RESOURCE_URL to see if it's remote (file staging)
 #        self.remote = self._check_remote_resource(self.keywords.get('RESOURCE_URL'))
@@ -487,33 +516,15 @@ class async_re_job:
         # based off independence sampling of the discrete distribution
         #
         # Pswapij = exp(-duij) / sum(exp(-duij))
-
-#        re_etot = 0
         n = len(replicas_waiting)
-
-        #replica energies in their current state
-        ee = []
-        for repl in replicas_waiting:
-            sid = self.status[repl]['stateid_current'] 
-            ee.append(U[sid][repl])
-            #energy of "pivot" replica
-            if repl == repl_i:
-                ei = U[sid][repl]
-#            re_etot += U[sid][repl]]
-
         #evaluate all i-j swap probabilities
         ps = zeros(n)
         sid_i = self.status[repl_i]['stateid_current'] 
         for j in range(n):
             repl_j = replicas_waiting[j]
             sid_j = self.status[repl_j]['stateid_current'] 
-            # energy after (i,j) exchange
-            eij = U[sid_i][repl_j] + U[sid_j][repl_i]
-            # ei+ee[j] is the original energy
-            # also, note that total energy is not included, since it is the same for all of the
-            # permutation states.
-            ps[j] = -(eij - ei - ee[j])
-#        ps.append(math.exp(-(eij - ei - ee[j])))
+            ps[j] = -(U[sid_i][repl_j] + U[sid_j][repl_i] - 
+                      U[sid_i][repl_i] - U[sid_j][repl_j]) 
         ps = exp(ps)
         #index of swap replica within replicas_waiting list
         j = self._weighted_choice_sub(ps)
@@ -523,38 +534,32 @@ class async_re_job:
 
     def doExchanges(self):
         """
-Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
-"""
-        print "Entering doExchanges Method: %f" % time.time()
+        Perform n rounds of exchanges among waiting replicas using Gibbs 
+        sampling.
+        """
+        print 'Entering doExchanges Method: %f'%time.time()
 
         # find out which replicas are waiting
-        self._update_running_no()
-        if self.waiting > 1:
-
-            replicas_waiting = []
-            states_waiting = []
-            for k in range(self.nreplicas):
-                if self.status[k]['running_status'] == "W" and self.status[k]['cycle_current'] > 1:
-                    replicas_waiting.append(k)
-                    states_waiting.append(self.status[k]['stateid_current'] )
-
+        replicas_waiting = self.replicas_waiting_to_exchange
+        states_waiting = self.states_waiting_to_exchange
+        if len(replicas_waiting) > 1:
             # backtrack cycle
             for k in replicas_waiting:
                 self.status[k]['cycle_current'] -= 1
-                self.status[k]['running_status'] = "E"
-
-            #Matrix of replica energies in each state.
-            #The computeSwapMatrix() function is defined by application 
-            #classes (Amber/US, Impact/BEDAM, etc.)
-            U = self._computeSwapMatrix(replicas_waiting, states_waiting)
-
-            # perform an exchange for each of the n replicas, m times
-            # (m=1 by default, set to ~1000 for debugging, see below)
-            mreps = 1
+                self.status[k]['running_status'] = 'E'
+            # Matrix of replica energies in each state.
+            # The computeSwapMatrix() function is defined by application 
+            # classes (Amber/US, Impact/BEDAM, etc.)
+            U = self._computeSwapMatrix(replicas_waiting,states_waiting)
+            # Perform an exchange for each of the n replicas, m times
+            # Perform an exchange for each of the n replicas, m times
+            if self.nexchg_rounds >= 0:
+                mreps = self.nexchg_rounds
+            else:
+                mreps = len(replicas_waiting)**(-self.nexchg_rounds)
             for reps in range(mreps):
-
                 for repl_i in replicas_waiting:
-                    repl_j = self._gibbs_re_j(repl_i, replicas_waiting, U)
+                    repl_j = self._gibbs_re_j(repl_i,replicas_waiting,U)
                     if repl_j != repl_i:
                         #Swap state id's
                         #Note that the energy matrix does not change
@@ -566,9 +571,9 @@ Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
 # Uncomment to debug Gibbs sampling: actual and computed populations of 
 # state permutations should match
 # 
-#                self._debug_collect_state_populations(replicas_waiting,U)
-#
-#            self._debug_validate_state_populations(replicas_waiting,U)
+                self._debug_collect_state_populations(replicas_waiting,U)
+
+            self._debug_validate_state_populations(replicas_waiting,U)
 
             # write input files
             for k in replicas_waiting:
@@ -576,15 +581,15 @@ Perform n rounds of exchanges among waiting replicas using Gibbs sampling.
                 # Places replica back into "W" (wait) state 
                 self.status[k]['cycle_current'] += 1
                 self._buildInpFile(k)
-                self.status[k]['running_status'] = "W"
+                self.status[k]['running_status'] = 'W'
 
-        print 'Exiting doExchanges Method: %f' % time.time()
+        print 'Exiting doExchanges Method: %f'%time.time()
 
 
     def _check_remote_resource(self, resource_url):
         """
-check if it's a remote resource. Basically see if 'ssh' is present
-"""
+        check if it's a remote resource. Basically see if 'ssh' is present
+        """
         ssh_c = re.compile("(.+)\+ssh://(.*)")
         m = re.match(ssh_c, resource_url)
         if m:
@@ -598,8 +603,8 @@ check if it's a remote resource. Basically see if 'ssh' is present
 
     def _setup_remote_workdir(self):
         """
-rsync local working directory with remote working directory
-"""
+        rsync local working directory with remote working directory
+        """
         os.system("ssh %s mkdir -p %s" % (self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
         extfiles = " "
         for efile in self.extfiles:
@@ -621,59 +626,137 @@ mkdir -p r$i ; \
 """
       
     def _debug_collect_state_populations(self, replicas, U):
+        """
+        Calculate the empirically observed distribution of state 
+        permutations. Permutations not observed will NOT be counted.
+        """
         try:
             self.npermt
-        except:
+        except (NameError,AttributeError):
             self.npermt = {}
   
         try:
             self.permt
-        except:
+        except (NameError,AttributeError):
             self.permt = {}
 
-        #state id list
-        sids = [ self.status[k]['stateid_current'] for k in replicas]
-
-        try:
-            self=perme0            
-        except:
-            e = 0
-            i = 0
-            for repl in replicas:
-                e += U[sids[i]][repl]
-                i += 1
-            self.perme0 = e
-
-        key = str(sids)
-        if self.npermt.has_key(key):
-            self.npermt[key] += 1
+        curr_states = [self.status[i]['stateid_current'] for i in replicas]
+        curr_perm = str(zip(replicas,curr_states))
+        if self.npermt.has_key(curr_perm):
+            self.npermt[curr_perm] += 1
         else:
-            self.npermt[key] = 1
-            self.permt[key] = sids[:]
+            self.npermt[curr_perm] = 1
+            self.permt[curr_perm] = copy(curr_states)
+        
+        #state id list
+        # sids = [ self.status[k]['stateid_current'] for k in replicas]
+
+        # try:
+        #     self=perme0            
+        # except:
+        #     e = 0
+        #     i = 0
+        #     for repl in replicas:
+        #         e += U[sids[i]][repl]
+        #         i += 1
+        #     self.perme0 = e
+
+        # key = str(sids)
+        # if self.npermt.has_key(key):
+        #     self.npermt[key] += 1
+        # else:
+        #     self.npermt[key] = 1
+        #     self.permt[key] = sids[:]
 
     def _debug_validate_state_populations(self, replicas, U):
-        ss = 0
-        for k in self.npermt.keys():
-            ss += self.npermt[k]
-        ps = []
+        """
+        Calculate the exact state distribution of all possible state
+        permutations using the calculated energies. Compare this to the 
+        empirical distribution using the Kullback-Liebler divergence:
+
+        DKL = sum_k emp_k*ln(emp_k/exact_k)
+
+        where k indexes the states and emp_k and exact_k are the empirical and
+        exact densities of state k respectively. For numerical stability, if
+        emp_k is 0 (the state is not observed) it is set to 1e-4. Although 
+        this introduces an arbitrary bias, it makes DKL always well-defined.
+        """
+        from itertools import permutations
+
+        # list of the currently occuplied states
+        curr_states = [self.status[i]['stateid_current'] for i in replicas]
+        # list of tuples of all possible state permutations
+        curr_perm = str(zip(replicas,curr_states))
+        print ('Swaps among replicas %s in states %s N! = %d permutations'%
+               (str(replicas),str(curr_states),math.factorial(len(replicas))))
+        emp  = []
+        exact = []
         sumps = 0
-        for k in self.npermt.keys():
-            sids = self.permt[k]
+        ss = 0
+        for state_perm in permutations(curr_states):
+            perm = str(zip(replicas,state_perm))
+            # emperical distribution observed here
+            if self.npermt.has_key(perm):
+                emp.append(self.npermt[perm])
+                ss += self.npermt[perm]
+            else:
+                emp.append(0.)
+            # exact boltzmann weight of all permutations
             e = 0
-            i = 0
-            for repl in replicas:
-                e += U[sids[i]][repl]
-                i += 1
-            p = math.exp(-(e-self.perme0))
-            ps.append(p)
+            for i,j in zip(replicas,state_perm):
+                e += U[j][i]
+            p = math.exp(-e)
+            exact.append(p)
             sumps += p
+        exact = [p/sumps for p in exact]
+        emp   = [float(p)/ss for p in emp]
+        sum1 = 0.
+        sum2 = 0.
+        DKL = 0.
+        print '   empirical exact   state permutation'
+        print '--------------------------------------'
+        dP = 1.e-4 # this will show up as 0 but contribute a lot to DKL
+        for k,state_perm in enumerate(permutations(curr_states)):
+            perm = str(zip(replicas,state_perm))
+            print '%3d %8.3f %8.3f %s'%(k+1,emp[k],exact[k],perm)
+            sum1 += emp[k]
+            sum2 += exact[k]
+            if emp[k] > 0.: 
+                empk = emp[k]
+            else:           
+                empk = dP
+            if exact[k] > 0.: 
+                exactk = exact[k]
+            else:             
+                exactk = dP
+            DKL += empk*math.log(empk/exactk)
+        print '--------------------------------------'
+        print ('    %8.3f %8.3f (sum) Kullback-Liebler Divergence = %f'
+               %(sum1,sum2,DKL))
+        print '================================================================'
 
-        i = 0
-        for k in self.npermt.keys():
-            print k, self.npermt[k]/float(ss), ps[i]/sumps
-            i += 1
+        # ss = 0
+        # for k in self.npermt.keys():
+        #     ss += self.npermt[k]
+        # ps = []
+        # sumps = 0
+        # for k in self.npermt.keys():
+        #     sids = self.permt[k]
+        #     e = 0
+        #     i = 0
+        #     for repl in replicas:
+        #         e += U[sids[i]][repl]
+        #         i += 1
+        #     p = math.exp(-(e-self.perme0))
+        #     ps.append(p)
+        #     sumps += p
 
-        sys.exit(0)
+        # i = 0
+        # for k in self.npermt.keys():
+        #     print k, self.npermt[k]/float(ss), ps[i]/sumps
+        #     i += 1
+
+        # sys.exit(0)
 
             
             
