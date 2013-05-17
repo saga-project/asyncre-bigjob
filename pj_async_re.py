@@ -571,9 +571,9 @@ class async_re_job(object):
 # Uncomment to debug Gibbs sampling: actual and computed populations of 
 # state permutations should match
 # 
-                self._debug_collect_state_populations(replicas_waiting,U)
+            #     self._debug_collect_state_populations(replicas_waiting,U)
 
-            self._debug_validate_state_populations(replicas_waiting,U)
+            # self._debug_validate_state_populations(replicas_waiting,U)
 
             # write input files
             for k in replicas_waiting:
