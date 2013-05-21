@@ -1,9 +1,6 @@
 import os
-import random, math # Only used in the now deprected _doExchange_pair()
 
-from pj_async_re import async_re_job
 from amber_async_re import *
-from amberio.ambertools import AMBERHOME,KB
 
 def _parse_state_params(paramline, state_delimiter=':'):
     """
@@ -25,7 +22,7 @@ def _parse_state_params(paramline, state_delimiter=':'):
                   for state in paramline.split(state_delimiter)]
     return params
 
-class amberus_async_re_job(pj_amber_job,async_re_job):
+class amberus_async_re_job(pj_amber_job):
 
     def _checkInput(self):
         pj_amber_job._checkInput(self)
@@ -36,7 +33,7 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
         # Check that all umbrellas are the same temperature.
         # The reduced energies calculated in this module do not account for
         # replicas running at different temperatures.
-        temp0 = self._checkStateParamsAreSame('temp0','cntrl')
+        temp0 = self._state_params_are_same('temp0','cntrl')
         if not temp0:
             self._exit('All temperatures MUST be the same when using AMBERUS.')
         self.beta = 1./(KB*temp0)
@@ -76,39 +73,6 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
             state.add_restraints(restraint_template)
             state.mdin.set_namelist_value('DISANG',DISANG_NAME,None)
             state.rstr.set_restraint_params(r0=posbias[n],k0=kbias[n])
-
-    def _doExchange_pair(self, repl_a, repl_b):
-        """Given two replicas, swap the state ids according to the Metropolis
-        criteria from swapping coordinates (proportional to bias energies). 
-        """
-        sid_a = self.status[repl_a]['stateid_current']
-        sid_b = self.status[repl_b]['stateid_current']
-           
-        # do the energy evaluations
-        u_aa = self._reduced_energy(sid_a,repl_a)
-        u_bb = self._reduced_energy(sid_b,repl_b)
-        u_ab = self._reduced_energy(sid_a,repl_b)
-        u_ba = self._reduced_energy(sid_b,repl_a)
-
-        # test for and perform the exchange
-        Exchange = pj_amber_job.ReplicaExchange(self,u_aa,u_bb,u_ab,u_ba)
-        if self.verbose: 
-            self._printExchangePairReport(repl_a,repl_b,u_aa,u_bb,u_ab,u_ba)
-        if Exchange: 
-            self._swapStates(repl_a,repl_b)
-            
-    def _printStateReport(self, repl):
-        """Report on a replica in relation to its current state (i.e. umbrella).
-        """
-        # Print a generic AMBER report
-        pj_amber_job._printStateReport(self,repl)
-        # Print an umbrella potential report
-        sid = self.status[repl]['stateid_current']
-        umbrella = self.states[sid].rstr
-        crds = self._extractLastCoordinates(repl)
-        print '\nUmbrella potential report:'
-        umbrella.print_restraint_report(crds)
-        umbrella.print_restraint_energy_report(crds)
   
     def _computeSwapMatrix(self, replicas, states):
         """
@@ -139,23 +103,25 @@ class amberus_async_re_job(pj_amber_job,async_re_job):
 #        U_new = pj_amber_job._computeSwapMatrix(self,replicas,states)
 #        return U_new,U_old
 
-    def _reduced_energy(self, state_i, repl_j):
-        """
-        Return the reduced energy of replica j in state i. 
-        NB: This is NOT the same as the current state of replica i.
-        """
-        crds_j = self._extractLastCoordinates(repl_j)
-        u_ij = self.states[state_i].rstr.energy(crds_j)
-        return self.beta*u_ij
+    # def _reduced_energy(self, state_i, repl_j):
+    #     """
+    #     Return the reduced energy of replica j in state i. 
+    #     NB: This is NOT the same as the current state of replica i.
+    #     """
+    #     crds_j = self._extractLastCoordinates(repl_j)
+    #     u_ij = self.states[state_i].rstr.energy(crds_j)
+    #     return self.beta*u_ij
 
     def _hasCompleted(self, repl, cyc):
-        # If the normal criteria isn't met, then return False.
-        if not pj_amber_job._hasCompleted(self,repl,cyc):
-            return False
+        """Returns True if an umbrella sampling replica has completed a cycle.
+        
+        Basically checks if the trace file exists.
+        """
+        trace = 'r%d/%s_%d.%s'%(repl,self.basename,cyc,DUMPAVE_EXT)
+        if os.path.exists(trace):
+            return pj_amber_job._hasCompleted(self,repl,cyc)
         else:
-            # Test the added criteria that a trace file was written
-            trace = 'r%d/%s_%d.%s'%(repl,self.basename,cyc,DUMPAVE_EXT)
-            return os.path.exists(trace)
+            return False
 
 
 if __name__ == '__main__':

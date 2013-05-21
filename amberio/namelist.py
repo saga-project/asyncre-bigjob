@@ -1,12 +1,76 @@
 """
-FILE: namelist.py - Python routines for parsing files with Fortran namelists
+Support for Fortran namelists (nl).
 
-DESCRIPTION:
+This module provides classes and routines for reading, writing, and 
+manipulating Fortan namelists. The predominant focus is on "new-style" 
+F90 conventions, but this should also be compatible with F77 conventions 
+in most cases.
 
-AUTHOR: Tim Giese (TJG) - <giese@biomaps.rutgers.edu>
-        Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>
+A Fortran namelist is comprised of:
+    - an ampersand followed by the namelist name
+    - zero or more name-value subsequences separated by a value separator
+    - a terminating slash
+
+Example:
+    &input
+     name1 = value1,
+     name2 = value2
+    /
+
+Exported Classes:
+    Namelist           Essentially a named dict with additional 
+                       attributes for string formatting.
+    NamelistCollection A list-derived class containing only Namelists. 
+                       Also has matching utilities using the Namelist 
+                       "name" attribute.
+
+Exported Functions:
+    read_namelists     Return a NamelistCollection composed of all 
+                       namelists in a file.
+    read_non_namelists Return non-namelist parts of a file as a list of 
+                       lines.
+    separate_namelists Return output of read_namelists and 
+                       read_non_namelists as a tuple.
+
+Example Usage:
+
+--nl_sample--
+ &sample_a
+  foo = 1, ! A comment line that will be ignored. 
+  bar = 2
+ /
+ &sample_b
+  foo = 3, 
+  bar = 4 
+ / ! Another comment line
+--nl_sample--
+
+>>> import namelist
+>>> nlc = namelist.read_namelists('nl_sample')
+>>> nlc
+[{'foo': 1, 'bar': 2}, {'foo': 3, 'bar': 4}]
+>>> nlc[0].name
+'sample_a'
+>>> nlc.first_match('sample_a').name
+'sample_a'
+>>> print nlc
+ &sample_a
+  foo = 1, bar = 2
+ /
+ &sample_b
+  foo = 3, bar = 4
+ /
+
+>>> for nl in nlc.matches('sample_a'): print nl
+ &sample_a
+  foo = 1, bar = 2
+ /
+
 """
 import re
+
+__author__ = ('Tim Giese (TJG) - <giese@biomaps.rutgers.edu>\n'
+              'Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>')
 
 __all__ = ['NamelistCollection','Namelist','separate_namelists',
            'read_non_namelists','read_namelists']
@@ -14,8 +78,8 @@ __all__ = ['NamelistCollection','Namelist','separate_namelists',
 
 class NamelistCollection(list):
     """
-    A NamelistCollection is a list of Namelist objects. Namelist objects can be
-    looked up by matching against their (possibly non-unique) names. 
+    A list of Namelist objects. Elements can be looked up by matching 
+    against their (possibly non-unique) "name" attribute. 
     """
     def __init__(self, *nls):
         list.__init__(self)
@@ -35,7 +99,9 @@ class NamelistCollection(list):
                 self.append(item)
 
     def matches(self, *names):
-        """Return all namelists whose name matches any of the arguments.
+        """
+        Return a generator of all namelists whose name matches any of the
+        arguments.
         """
         for nl in self:
             for name in names:
@@ -43,7 +109,9 @@ class NamelistCollection(list):
                     yield nl
 
     def does_not_match(self, *names):
-        """Return all namelists whose name does not match any of the arguments.
+        """
+        Return a generator of all namelists whose name does not match any
+        of the arguments.
         """
         for nl in self:
             is_a_match = False
@@ -54,25 +122,35 @@ class NamelistCollection(list):
             if not is_a_match:
                 yield nl
 
-    def first_match(self, name):
+    def first_match(self, *names):
+        """
+        Return the first result from matches(). If there are no matches,
+        return None.
+        """
         try:
-            return next(self.matches(name))
+            return next(self.matches(*names))
         except StopIteration:
-            # This happens if matches returns an empty generator.
+            # This happens if matches() returns an empty generator.
+            return None
+
+    def first_non_match(self, *names):
+        """
+        Return the first result from does_not_match(). If there are no
+        matches, return None.
+        """
+        try:
+            return next(self.does_not_match(*names))
+        except StopIteration:
+            # This happens if does_not_match() returns an empty generator.
             return None
 
 
 class Namelist(dict):
     """
-    A Namelist is a dictionary derived class that contains the names and values 
-    of a Fortran namelist. Names (keys) are stored as strings while values are 
-    cast as ints and floats when appropriate (Note: this does not occur for 
-    lists of ints and/or floats).
-
-    A Fortran namelist is comprised of:
-    - an ampersand followed by the namelist name
-    - zero or more name-value subsequences separated by a value separator
-    - a terminating slash
+    A dict-derived class containing the names and values of a Fortran 
+    namelist. Names (keys) are stored as strings while values are cast as
+    ints and floats when appropriate (Note: this does not occur for lists
+    of ints and/or floats).
 
     Attributes
     ----------
@@ -85,11 +163,11 @@ class Namelist(dict):
     value_separator : string, optional
         Separate name-value subsequences with this.
     max_namevalues_per_line : int, optional
-        Start a new line if the number of name-value subsequences on a given
-        line exceeds this.
+        Start a new line if the number of name-value subsequences on a 
+        given line exceeds this.
     max_chars_per_line : int, optional
-        Start a new line if the number of characters on a given line exceeds
-        this.
+        Start a new line if the number of characters on a given line 
+        exceeds this.
     """
     def __init__(self, name=None, line_prefix = ' ', 
                  name_value_separator = ' = ', value_separator = ', ',
@@ -261,11 +339,11 @@ def read_non_namelists(filename):
 def _namelists_from_string(string):
     # Return a NamelistCollection of all the namelists contained in a string.
     nlObjs = NamelistCollection()
-    nls = re.findall(r"(&[a-zA-Z]+.*?[^\\]\/)",string)
+    nls = re.findall(r"(&[a-zA-Z0-9_]+.*?[^\\]\/)",string)
     for nl in nls:
         nlName = None
         nlStr  = None
-        result = re.match(r"&([a-zA-Z]+)(.*)[^\\]\/",nl)
+        result = re.match(r"&([a-zA-Z0-9_]+)(.*)[^\\]\/",nl)
         if result is not None:
             nlName = result.group(1).strip()
             nlStr  = result.group(2).strip()
@@ -291,7 +369,7 @@ def _namelists_from_string(string):
 
 def _non_namelists_from_string(string):
     # Return all those parts of a string that are not a namelist.
-    nls = re.findall(r"(&[a-zA-Z]+.*?[^\\]\/)",string,re.S)
+    nls = re.findall(r"(&[a-zA-Z0-9_]+.*?[^\\]\/)",string,re.S)
     for nl in nls:
         string = string.replace(nl,"")
     lines = re.findall(r"(.*)\n*",string)

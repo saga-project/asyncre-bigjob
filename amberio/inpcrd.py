@@ -1,24 +1,24 @@
 """
-FILE: inpcrd.py - plugin for I/O of AMBER coordinate files
+Plugin for I/O of AMBER coordinate files
 
-DESCRIPTION:
-
-AUTHOR: Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>
 """
 try:
     from netCDF4 import Dataset
 except ImportError:
-    print ('WARNING: Unable to find netCDF4. Restart files in netCDF format '
-           'will not be available.')
+    print ('WARNING: Unable to find netCDF4. Reading of restart files in '
+           'netCDF format will not be available.')
 
 from amberio.ambertools import rst7 as _rst7_parmed
+
+__author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
 
 __all__ = ['rst7']
 
 
 class rst7(object):
-    """
-    Create an rst7 file object from an AMBER restart file (formatted or netCDF).
+    """Create an rst7 file object from an AMBER restart file.
+
+    Both ASCII and netCDF formats are supported.
     """
     def __init__(self, inpcrd_name, is_binary=True):
         self.filename = inpcrd_name
@@ -31,7 +31,7 @@ class rst7(object):
 
         if is_binary:
             # Try to read the restart file in netCDF format. If that fails,
-            # fall back to reading formatted restart file.
+            # fall back to reading a formatted restart file.
             try:
                 tmp = Dataset(inpcrd_name,'r')
                 self.valid = True
