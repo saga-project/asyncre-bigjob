@@ -20,7 +20,7 @@ from configobj import ConfigObj
 #pilotjob: Packages for Pilot API
 from pilot import PilotComputeService, ComputeDataService, State
 
-__version__ = '0.1.0'
+__version__ = '0.2.1'
 
 class async_re_job:
     """
