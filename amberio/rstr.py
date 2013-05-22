@@ -794,10 +794,7 @@ if __name__ == '__main__':
     import sys
     import copy
 
-    import amberio.ambertools
-    from amberio.inpcrd import rst7
-    from chemistry.amber.readparm import AmberParm
-    
+    import amberio.ambertools as at
 
     argc = len(sys.argv)
     print '=== AmberRestraint Test Suite ==='
@@ -829,11 +826,11 @@ if __name__ == '__main__':
     if argc > 2:
         crdFile = sys.argv[2]
         print 'Reading coordinates from file: %s'%crdFile
-        crds = rst7(crdFile).coords
+        crds = at.rst7(crdFile).coords
     if argc > 3:
         prmFile = sys.argv[3]
         print 'Reading parm info from file: %s'%prmFile
-        anames = AmberParm(prmFile).parm_data['ATOM_NAME']
+        anames = at.AmberParm(prmFile).parm_data['ATOM_NAME']
 
     # Print a report of the restraints so far
     print 'printing an AMBER-style report:'
