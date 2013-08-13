@@ -12,7 +12,7 @@ except:
 sys.path.append(os.path.join(AMBERHOME,'bin'))
 try:
     from mdoutanalyzer.mdout import AmberMdout
-    from chemistry.amber.readparm import rst7
+    from chemistry.amber.readparm import AmberParm,rst7
 except ImportError:
     raise Exception('Could not load AMBER python libraries. These are'
                     ' only available in AmberTools12 and later.')
@@ -28,4 +28,4 @@ BARKC     = 1.6604345e4*4.184        # converts kcal/mol to bar?
 
 __author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
 
-__all__ = ['AMBERHOME','KB','AmberMdout','rst7']
+__all__ = ['AMBERHOME','KB','AmberMdout','AmberParm','rst7']

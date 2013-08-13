@@ -10,7 +10,7 @@ import tempfile
 import commands
 import shutil
 
-from amberio.ambertools import AMBERHOME,KB,AmberMdout
+import amberio.ambertools as at
 from amberio.mdin import read_amber_mdin
 from amberio.rstr import read_amber_restraint
 
@@ -308,7 +308,7 @@ class AmberRun(object):
             print snglpnt_run.filenames
             print cmd
             commands.getstatusoutput(cmd)
-            snglpnt_mdout = AmberMdout('mdout')
+            snglpnt_mdout = at.AmberMdout('mdout')
         finally:
             # Change back to the working directory and clean up output files.
             os.chdir(rundir)
@@ -325,7 +325,7 @@ class AmberRun(object):
         snglpnt_mdout = self.snglpnt(inpcrd)
         if self.mdin.namelist_value('ntt','cntrl') != 0:
             temp0 = self.mdin.namelist_value('temp0','cntrl')
-            beta = 1./(KB*temp0)
+            beta = 1./(at.KB*temp0)
         else:
             raise Exception('The reduced energy is undefined for constant '
                             'energy ensembles.')
