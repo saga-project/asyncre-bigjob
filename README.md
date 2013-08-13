@@ -15,7 +15,6 @@ ASyncRE-BigJob: https://github.com/saga-project/asyncre-bigjob/wiki
 BigJob: https://github.com/saga-project/BigJob/wiki
 
 async-replica-exchange@googlegroups.com
-
 async-replica-exchange-devel@googlegroups.com
 
 Installation
@@ -23,30 +22,25 @@ Installation
 
 The ASyncRE packages primarily depends on BigJob. To install it follow the instructions on the BigJob site:  http://http://saga-project.github.io/BigJob/. Note that BigJob requires a working queuing system and a redis server. ASyncRE also depends numpy and configobj, which are easily installed from PiP: 
 
-pip install numpy
-
-pip install configobj
-
+    pip install numpy
+    pip install configobj
 
 ASyncRE is currently distributed only by git:
 
-git clone https://github.com/saga-project/asyncre-bigjob.git
-
-cd asyncre-bigjob
-
-python setup.py install
-
+    git clone https://github.com/saga-project/asyncre-bigjob.git
+    cd asyncre-bigjob
+    python setup.py install
 
 A distribution archive can be created by issuing the command:
 
-python setup.py sdist
+    python setup.py sdist
 
 after which async_re-<version>.tar.gz will be found under dist/
 
-
 Installation from the distribution archive:
 
-pip install async_re-<version>.tar.gz
+    cd dist
+    pip install async_re-<version>.tar.gz
 
 
 Test
@@ -54,7 +48,7 @@ Test
 
 To test execute the "date" application
 
-python date_async_re.py command.inp
+    python date_async_re.py command.inp
 
 which will spawn a bunch of /bin/date replicas.
 
