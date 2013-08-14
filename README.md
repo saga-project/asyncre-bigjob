@@ -58,5 +58,4 @@ See additional sample application files under the examples/ subdirectory.
 Documentation
 -------------
 
-Documentation is in the doc/ subdirectory and on the ASyncRE wiki (https://github.com/saga-project/asyncre-bigjob/wiki, currently under construction).
-
+Documentation files can be found in the doc/ subdirectory and also on the [ASyncRE wiki](https://github.com/saga-project/asyncre-bigjob/wiki)
