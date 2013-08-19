@@ -43,6 +43,11 @@ class date_async_re_job(pj_date_job,async_re_job):
     def _doExchange_pair(self,repl_a,repl_b):
         pass
 
+    def _computeSwapMatrix(self, replicas, states):
+        U = [[ 0. for j in range(self.nreplicas)] 
+             for i in range(self.nreplicas)]
+        return U
+
 if __name__ == '__main__':
 
     # Parse arguments:
