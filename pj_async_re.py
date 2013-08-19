@@ -511,21 +511,65 @@ class async_re_job(object):
             if rnd < 0:
                 return i
                 
+# _gibbs_re_j() produces a replica "j" to exchange with the given replica "i"
+# based on independent sampling from the discrete Metropolis transition matrix
+#
+# T_rs = alpha_rs min[1,exp(-du_rs)] ; r not= s
+# T_rr = 1 - sum_(s not= r) T_rs 
+#
+# where r and s are replica exchange permutations, r being the current
+# permutation and s the new permutation. alpha_rs = 0 unless permutations
+# r and s differ by a single replica swap and alpha_rs = 1/(n-1) otherwise,
+# n being the number of replicas and (n-1) is the number of permutations s
+# differing by permutation r by a single swap. du_rs is the change in
+# reduced potential energy of the replica exchange ensemble in going from
+# permutations r to permutation s (that is due to a replica swap).
+# Based on the above we have
+# du_rs = u_a(j)+u_b(i)-[u_a(i)+u_b(j)]
+# where i and j are the replica being swapped and a and b, respectively, are the 
+# states they occupy in the r permutations and b and a, respectively, those in
+# the s permutations.
+# 
+# The energies u_a(i), i=1,n and a=1,n, are assumed stored in the input matrix U[a][i].
+#
+# In general, the set of replicas across which exchanges are considered is
+# a subset of the n replicas. This list is passed in the 'replicas_waiting'
+# list. Replica i ('repl_i') is assumed to be in this list.
+#
     def _gibbs_re_j(self,repl_i,replicas_waiting, U):
-        # produces a replica "j" to exchange with the given replica "i"
-        # based off independence sampling of the discrete distribution
-        #
-        # Pswapij = exp(-duij) / sum(exp(-duij))
         n = len(replicas_waiting)
+        if n < 2:
+            return repl_i
         #evaluate all i-j swap probabilities
         ps = zeros(n)
+        du = zeros(n)
+        eu = zeros(n)
+        #
         sid_i = self.status[repl_i]['stateid_current'] 
         for j in range(n):
             repl_j = replicas_waiting[j]
-            sid_j = self.status[repl_j]['stateid_current'] 
-            ps[j] = -(U[sid_i][repl_j] + U[sid_j][repl_i] - 
-                      U[sid_i][repl_i] - U[sid_j][repl_j]) 
-        ps = exp(ps)
+            sid_j = self.status[repl_j]['stateid_current']
+            du[j] = (U[sid_i][repl_j] + U[sid_j][repl_i] 
+                  - U[sid_i][repl_i] - U[sid_j][repl_j])
+        eu = exp(-du)
+        #
+        pii = 1.0
+        i = -1
+        f = 1./(float(n) - 1.)
+        for j in range(n):
+            repl_j = replicas_waiting[j]
+            if repl_j == repl_i:
+                i = j
+            else:
+                if eu[j] > 1.0:
+                    ps[j] = f
+                else:                    
+                    ps[j] = f*eu[j]
+                pii -= ps[j]
+        try:
+            ps[i] = pii
+        except:
+            self._exit('gibbs_re_j(): unrecoverable error: replica i not in the list of waiting replicas?')
         #index of swap replica within replicas_waiting list
         j = self._weighted_choice_sub(ps)
         #actual replica
@@ -571,9 +615,8 @@ class async_re_job(object):
 # Uncomment to debug Gibbs sampling: actual and computed populations of 
 # state permutations should match
 # 
-            #     self._debug_collect_state_populations(replicas_waiting,U)
-
-            # self._debug_validate_state_populations(replicas_waiting,U)
+#                    self._debug_collect_state_populations(replicas_waiting,U)
+#            self._debug_validate_state_populations(replicas_waiting,U)
 
             # write input files
             for k in replicas_waiting:
@@ -715,10 +758,10 @@ mkdir -p r$i ; \
         DKL = 0.
         print '   empirical exact   state permutation'
         print '--------------------------------------'
-        dP = 1.e-4 # this will show up as 0 but contribute a lot to DKL
+        dP = 1.e-9 # this will show up as 0 but contribute a lot to DKL
         for k,state_perm in enumerate(permutations(curr_states)):
             perm = str(zip(replicas,state_perm))
-            print '%3d %8.3f %8.3f %s'%(k+1,emp[k],exact[k],perm)
+            print '%8d %9.4f %9.4f %s'%(k+1,emp[k],exact[k],perm)
             sum1 += emp[k]
             sum2 += exact[k]
             if emp[k] > 0.: 
