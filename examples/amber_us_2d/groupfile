@@ -2,5 +2,5 @@
 -O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r1.rst7
 -O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r2.rst7
 -O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r3.rst7
--O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r4.rst7
--O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r5.rst7
+#-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r4.rst7
+#-O -i DMP_US.inp -p DMP_US.parm7 -c inpcrds/r5.rst7

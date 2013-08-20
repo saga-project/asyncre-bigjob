@@ -34,7 +34,7 @@ class async_re_job(object):
         self._checkInput()
         self._printStatus()
 
-    def __getattr__(self, name):
+    def __getattribute__(self, name):
         if name == 'replicas_waiting':
             # Return a list of replica indices of replicas in a wait state.
             self.updateStatus()
@@ -57,7 +57,7 @@ class async_re_job(object):
             return [self.status[k]['stateid_current'] 
                     for k in self.replicas_waiting_to_exchange]
         else:
-            object.__getattr__(self,name)
+            return object.__getattribute__(self,name)
 
     def _error(self, text):
         """Print and flush an error message to stdout."""
@@ -425,8 +425,7 @@ class async_re_job(object):
             if self.verbose:
                 if details.has_key('start_time'):
                     if details.has_key('end_time'):
-                        print ('**********************************************'
-                               '***********')
+                        print '*'*80
                         print ('Replica: %d Start Time: %f End Time: %f'%
                                (replica,float(details['start_time']),
                                 float(details['end_time'])))
@@ -536,7 +535,7 @@ class async_re_job(object):
 # a subset of the n replicas. This list is passed in the 'replicas_waiting'
 # list. Replica i ('repl_i') is assumed to be in this list.
 #
-    def _gibbs_re_j(self,repl_i,replicas_waiting, U):
+    def _gibbs_re_j(self, repl_i, replicas_waiting, U):
         n = len(replicas_waiting)
         if n < 2:
             return repl_i
@@ -615,8 +614,8 @@ class async_re_job(object):
 # Uncomment to debug Gibbs sampling: actual and computed populations of 
 # state permutations should match
 # 
-#                    self._debug_collect_state_populations(replicas_waiting,U)
-#            self._debug_validate_state_populations(replicas_waiting,U)
+                    self._debug_collect_state_populations(replicas_waiting,U)
+            self._debug_validate_state_populations(replicas_waiting,U)
 
             # write input files
             for k in replicas_waiting:
@@ -756,8 +755,8 @@ mkdir -p r$i ; \
         sum1 = 0.
         sum2 = 0.
         DKL = 0.
-        print '   empirical exact   state permutation'
-        print '--------------------------------------'
+        print '%8s %9s %9s %s'%('','empirical','exact','state permutation')
+        print '-'*80
         dP = 1.e-9 # this will show up as 0 but contribute a lot to DKL
         for k,state_perm in enumerate(permutations(curr_states)):
             perm = str(zip(replicas,state_perm))
@@ -773,11 +772,11 @@ mkdir -p r$i ; \
             else:             
                 exactk = dP
             DKL += empk*math.log(empk/exactk)
-        print '--------------------------------------'
-        print ('    %8.3f %8.3f (sum) Kullback-Liebler Divergence = %f'
-               %(sum1,sum2,DKL))
-        print '================================================================'
-
+        print '-'*80
+        print ('%8s %9.4f %9.4f (sum) Kullback-Liebler Divergence = %f'
+               %('',sum1,sum2,DKL))
+        print '='*80
+        
         # ss = 0
         # for k in self.npermt.keys():
         #     ss += self.npermt[k]
