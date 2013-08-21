@@ -316,6 +316,9 @@ class async_re_job(object):
                'processes_per_node': self.ppn,
                'project': self.keywords.get('PROJECT'),
                'walltime': int(self.keywords.get('WALL_TIME'))}
+
+        if self.keywords.get('SGE_WAYNESS') is not None:
+                pcd['spmd_variation'] = self.keywords.get('SGE_WAYNESS')
          
 	#pilotjob: Create pilot job with above description
         self.pj.create_pilot(pilot_compute_description=pcd)
