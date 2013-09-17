@@ -16,11 +16,14 @@ Exported Classes:
     AmberMdin     A list of AmberNamelists
 
 """
+from collections import OrderedDict
+
 from namelist import *
 
 __author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
 
 __all__ = ['read_amber_mdin','AmberMdin','AmberNamelist']
+
 
 def read_amber_mdin(mdin_name, engine='sander'):
     """Read an AMBER mdin file and return an AmberMdin object."""
@@ -63,7 +66,7 @@ class AmberMdin(NamelistCollection):
             txt += str(nl)
         end_txt = ''
         for nl in self.matches('wt'):
-            if "%s"%str(nl['type']).upper() != "'END'":
+            if '%s'%str(nl['type']).upper() != "'END'":
                 txt += str(nl)
             else:
                 end_txt = str(nl) 
@@ -86,7 +89,8 @@ class AmberMdin(NamelistCollection):
         NamelistCollection.append(self,item)
 
     def namelist_value(self, variable, namelist, wt_type=None):
-        """Return the value of a variable from a given namelist. 
+        """
+        Return the value of a variable from a given namelist. 
         
         Notes:
         - NMR variables belong to a namelist with name None.
@@ -159,19 +163,19 @@ class AmberNamelist(Namelist):
         if self.name is not None:
             # Print only the the non-default values using normal formatting for
             # a Namelist string.
-            return Namelist.__str__(Namelist(self.name,**self.non_defaults()))
+            return Namelist.__str__(Namelist(self.name,**self.non_defaults))
         else:
             # Modify the Namelist print behavior for the NoneType namelist.
             # Namely, don't print the "&name" section and ending slash.
             return '\n'.join([' %s=%s'%(k,v) 
-                              for k,v in self.non_defaults().iteritems()])
- 
-    def non_defaults(self):
-        """
-        Return a dict containing only name/value combinations that differ
-        from the default values.
-        """
-        return dict((k,v) for k,v in self.iteritems() if v != self.defaults[k])
+                              for k,v in self.non_defaults.iteritems()])
+
+    def __getattribute__(self, name):
+        if name == 'non_defaults':
+            return OrderedDict((k,v) for k,v in self.iteritems() 
+                               if v != self.defaults[k])
+        else:
+            return Namelist.__getattribute__(self,name)
 
     def _set_defaults(self):
         """Set the default variables for the MD engine (e.g. sander)."""

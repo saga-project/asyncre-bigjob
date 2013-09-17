@@ -67,6 +67,7 @@ Example Usage:
  /
 
 """
+from collections import OrderedDict
 import re
 
 __author__ = ('Tim Giese (TJG) - <giese@biomaps.rutgers.edu>\n'
@@ -145,7 +146,7 @@ class NamelistCollection(list):
             return None
 
 
-class Namelist(dict):
+class Namelist(OrderedDict):
     """
     A dict-derived class containing the names and values of a Fortran 
     namelist. Names (keys) are stored as strings while values are cast as
@@ -179,127 +180,27 @@ class Namelist(dict):
         self.value_separator = str(value_separator)
         self.max_namevalues_per_line = int(max_namevalues_per_line)
         self.max_chars_per_line = int(max_chars_per_line)
-        dict.__init__(self,*args,**kwargs)
+        OrderedDict.__init__(self,*args,**kwargs)
 
     def __str__(self):
         txt = ' &%s\n'%self.name
         txt_buf = ' %s'%self.line_prefix
         nvalues = 0
         for name,value in self.iteritems():
-            txt_buf += '%s%s%s%s'%(name,self.name_value_separator,value,
-                                   self.value_separator)
+            to_add = '%s%s%s%s'%(name,self.name_value_separator,value,
+                                 self.value_separator)
             nvalues += 1
-            if (len(txt_buf) >= self.max_chars_per_line or
+            if (len(txt_buf+to_add) >= self.max_chars_per_line or
                 nvalues >= self.max_namevalues_per_line):
                 txt += txt_buf + '\n'
-                txt_buf = ' %s'%self.line_prefix
+                txt_buf = ' %s%s'%(self.line_prefix,to_add)
                 nvalues = 0
+            else:
+                txt_buf += to_add
         txt += txt_buf.rstrip(self.value_separator) 
         txt += '\n /\n'
         return txt
 
-
-def ValueIsInt(e):
-    isInt = False
-    isFloat = False
-    isString = False
-    try:
-        a = int(e)
-        isInt = True
-    except ValueError:
-        try:
-            a = float(e)
-            isFloat = True
-        except ValueError:
-            isString = True
-    return isInt
-
-def ValueIsFloat(e):
-    isInt = False
-    isFloat = False
-    isString = False
-    try:
-        a = int(e)
-        isInt = True
-    except ValueError:
-        try:
-            a = float(e)
-            isFloat = True
-        except ValueError:
-            isString = True
-    return isFloat
-
-def ValueIsString(e):
-    isInt = False
-    isFloat = False
-    isString = False
-    try:
-        a = int(e)
-        isInt = True
-    except ValueError:
-        try:
-            a = float(e)
-            isFloat = True
-        except ValueError:
-            isString = True
-    return isString
-
-def AllElementsAreInt(eles):
-    isInt = False
-    for e in eles:
-        isInt = ValueIsInt(e)
-        if not isInt:
-            break
-    return isInt
-
-def AllElementsAreFloat(eles):
-    isFloat = False
-    for e in eles:
-        isFloat = ValueIsFloat(e)
-        if not isFloat:
-            break
-    return isFloat
-
-def ConvertToInts(eles):
-    for i in range(len(eles)):
-        eles[i] = int(eles[i])
-    return eles
-
-def ConvertToFloats(eles):
-    for i in range(len(eles)):
-        eles[i] = float(eles[i])
-    return eles
-
-def ConvertToCommonType(e):
-    if ValueIsInt(e): 
-        return int(e)
-    elif ValueIsFloat(e):
-        return float(e)
-    else:
-        return str(e)
-
-def IsLikeAList(v):
-   """Return True if v is a non-string sequence and is iterable. Note that
-   not all objects with getitem() have the iterable attribute
-   Taken from http://stackoverflow.com/questions/836387/how-can-i-tell-if-a-python-variable-is-a-string-or-a-list
-   """
-   if hasattr(v, '__iter__') and not isinstance(v, basestring):
-       return True
-   else:
-       #This will happen for most atomic types like numbers and strings
-       return False
-
-def ConvertToString(v):
-    line = ""
-    if IsLikeAList(v):
-        for item in iter(v):
-            if ValueIsString(item):
-                line += "'" + str(item) + "' "
-            else:
-                line += str(item) + " "
-    else:
-        line = str(v)
-    return line
 
 def separate_namelists(filename):
     """
@@ -308,11 +209,11 @@ def separate_namelists(filename):
     """
     fileLines = open(filename,'r').readlines()
     for i in range(len(fileLines)):
-        fileLines[i] = re.sub(r"^(.*?)!.*$",r"\1",fileLines[i])
-    bigLine1 = ""
-    bigLine2 = ""
+        fileLines[i] = re.sub(r'^(.*?)!.*$',r'\1',fileLines[i])
+    bigLine1 = ''
+    bigLine2 = ''
     for line in fileLines:
-        bigLine1 += line.strip() + " "
+        bigLine1 += line.strip() + ' '
         bigLine2 += line
     return _namelists_from_string(bigLine1),_non_namelists_from_string(bigLine2)
 
@@ -320,34 +221,43 @@ def read_namelists(filename):
     """Return a NamelistCollection of all namelists contained in a file."""
     fileLines = open(filename,'r').readlines()
     for i in range(len(fileLines)):
-        fileLines[i] = re.sub(r"^(.*?)!.*$",r"\1",fileLines[i])
-    bigLine = ""
+        fileLines[i] = re.sub(r'^(.*?)!.*$',r'\1',fileLines[i])
+    bigLine = ''
     for line in fileLines:
-        bigLine = bigLine + line.strip() + " "
+        bigLine = bigLine + line.strip() + ' '
     return _namelists_from_string(bigLine)
 
 def read_non_namelists(filename):
     """Return a list of lines not containing namelists in a file."""
     fileLines = open(filename,'r').readlines()
     for i in range(len(fileLines)):
-        fileLines[i] = re.sub(r"^(.*?)!.*$",r"\1",fileLines[i])
-    bigLine = ""
+        fileLines[i] = re.sub(r'^(.*?)!.*$',r'\1',fileLines[i])
+    bigLine = ''
     for line in fileLines:
         bigLine = bigLine + line
     return _non_namelists_from_string(bigLine)
 
+def _as_common_type(string):
+    try:
+        return int(string)
+    except ValueError:
+        try:
+            return float(string)
+        except ValueError:
+            return str(string)
+
 def _namelists_from_string(string):
     # Return a NamelistCollection of all the namelists contained in a string.
     nlObjs = NamelistCollection()
-    nls = re.findall(r"(&[a-zA-Z0-9_]+.*?[^\\]\/)",string)
+    nls = re.findall(r'(&[a-zA-Z0-9_]+.*?[^\\]\/)',string)
     for nl in nls:
         nlName = None
-        nlStr  = None
-        result = re.match(r"&([a-zA-Z0-9_]+)(.*)[^\\]\/",nl)
+        nlStr = None
+        result = re.match(r'&([a-zA-Z0-9_]+)(.*)[^\\]\/',nl)
         if result is not None:
             nlName = result.group(1).strip()
             nlStr  = result.group(2).strip()
-        keyvals = re.findall(r"(.*?)=([^=]+)",nlStr)
+        keyvals = re.findall(r'(.*?)=([^=]+)',nlStr)
         for i in range(len(keyvals)):
             k,v = keyvals[i]
             if len(k) == 0:
@@ -359,23 +269,22 @@ def _namelists_from_string(string):
                 keyvals[i] = k,v
         for i in range(len(keyvals)):
             k,v = keyvals[i]
-            v = re.sub(r"\,$","",v)
+            v = re.sub(r"\,$",'',v)
             keyvals[i] = k,v
-        nlMap = {}
-        for key,val in keyvals:
-            nlMap[key.strip()] = ConvertToCommonType(val.strip())
+        nlMap = OrderedDict()
+        for k,v in keyvals:
+            nlMap[k.strip()] = _as_common_type(v.strip())
         nlObjs.append(Namelist(nlName,**nlMap))
     return nlObjs
 
 def _non_namelists_from_string(string):
     # Return all those parts of a string that are not a namelist.
-    nls = re.findall(r"(&[a-zA-Z0-9_]+.*?[^\\]\/)",string,re.S)
+    nls = re.findall(r'(&[a-zA-Z0-9_]+.*?[^\\]\/)',string,re.S)
     for nl in nls:
-        string = string.replace(nl,"")
-    lines = re.findall(r"(.*)\n*",string)
+        string = string.replace(nl,'')
+    lines = re.findall(r'(.*)\n*',string)
     newlines = []
     for line in lines:
         if len(line.strip()):
             newlines.append(line)
     return newlines
-

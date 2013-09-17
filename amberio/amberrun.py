@@ -88,7 +88,7 @@ def amberrun_from_files(basename, filenames=None, nruns=1, mode='',
     # Define states with these file names
     run_list = AmberRunCollection()
     for n in range(nruns):
-        run_list.append(AmberRun(engine,mode,**files))
+        run_list.append(AmberRun(engine,mode,None,**files))
     return run_list
 
 
@@ -145,7 +145,7 @@ def parse_amber_args(args, engine='sander'):
             parsed_filenames[file] = arg_list[arg_list.index(flag)+1]
         except ValueError:
             pass
-    return AmberRun(engine,parsed_mode,**parsed_filenames)
+    return AmberRun(engine,parsed_mode,None,**parsed_filenames)
 
 
 class AmberRun(object):
@@ -203,23 +203,28 @@ class AmberRun(object):
                 self.filenames['mdcrd'] = basename + '.crd'
             self.filenames['mdinfo'] = basename + '.info'
 
-    def __getattr__(self, name):
+    def __getattribute__(self, name):
         if name == 'has_refc':
-            return (self.mdin.namelist_value('ntr','cntrl') != 0)
+            mdin = object.__getattribute__(self,'mdin')
+            return (mdin.namelist_value('ntr','cntrl') != 0)
         elif name == 'has_restraints':
-            return (self.mdin.namelist_value('nmropt','cntrl') != 0)
+            mdin = object.__getattribute__(self,'mdin')
+            return (mdin.namelist_value('nmropt','cntrl') != 0)
         elif name == 'restrt_is_binary':
-            return (self.mdin.namelist_value('ntxo','cntrl') != 1)
+            mdin = object.__getattribute__(self,'mdin')
+            return (mdin.namelist_value('ntxo','cntrl') != 1)
         elif name == 'mdcrd_is_binary':
-            return (self.mdin.namelist_value('ioutfm','cntrl') != 0)
+            mdin = object.__getattribute__(self,'mdin')
+            return (mdin.namelist_value('ioutfm','cntrl') != 0)
         elif name == 'arguments':
-            args = [self.mode]
-            for file,filename in self.filenames.iteritems():
+            args = [object.__getattribute__(self,'mode')]
+            for file,filename in \
+                    object.__getattribute__(self,'filenames').iteritems():
                 if filename != DEFAULT_FILENAMES[file]:
                     args.extend([FILE_FLAGS[file],filename])
             return args
         else:
-            object.__get__attr(self,name)
+            return object.__getattribute__(self,name)
 
     def restart(self, is_restart=True):
         """Change whether or not this run is a restart."""
