@@ -26,39 +26,75 @@ class amberus_async_re_job(pj_amber_job):
 
     def _checkInput(self):
         pj_amber_job._checkInput(self)
-        #make sure AMBER umbrella sampling is wanted
-        if self.keywords.get('RE_TYPE') != 'AMBERUS':
-            self._exit("RE_TYPE is not AMBERUS")
-
-        # Check that all umbrellas are the same temperature.
-        # The reduced energies calculated in this module do not account for
-        # replicas running at different temperatures.
+        #    Check that all umbrellas are the same temperature. The reduced 
+        # energies calculated in this module do not account for replicas 
+        # running at different temperatures.
+        #
         temp0 = self._state_params_are_same('temp0','cntrl')
         if not temp0:
             self._exit('All temperatures MUST be the same when using AMBERUS.')
         self.beta = 1./(KB*temp0)
 
-        # ============================
-        # Umbrella Sampling Parameters
-        # ============================
-        # Parse the list of force constants and bias positions and check that
-        # they are the proper dimensions (i.e. match each other).
-        if self.keywords.get('FORCE_CONSTANTS') is None:
-            self._exit("FORCE_CONSTANTS needs to be specified")
-        kbias = _parse_state_params(self.keywords.get('FORCE_CONSTANTS'))
-        if self.keywords.get('BIAS_POSITIONS') is None:
-            self._exit("BIAS_POSITIONS needs to be specified")
-        posbias = _parse_state_params(self.keywords.get('BIAS_POSITIONS'))
-        nR0 = len(posbias)
-        nK0 = len(kbias)
-        n = self.nreplicas
+        """ 
+        Umbrella Sampling Parameters
+        
+        These can be read in two ways: 
+        1) from a file specified in the configure file as BIAS_FILE 
+        containing nreplica rows with entries of the form:
+        
+        bias_position1 force_constant1 bias_position2 force_constant2 ...
+        
+        or
+        
+        2) from strings in the configure file set equal to BIAS_POSITIONS and 
+        FORCE_CONSTANTS. These are parsed differently in one and higher 
+        dimensions (comma or comma/colon delimited, see '_parse_state_params').
+        """
+        bias_filename = self.keywords.get('BIAS_FILE')
+        if bias_filename is not None:
+            try:
+                bias_positions = []
+                force_constants = []
+                for i,line in enumerate(open(bias_filename,'r')):
+                    try:
+                        line = line[:line.index('#')] # ignore comments
+                    except ValueError:
+                        pass
+                    if len(line) > 0: # ignore empty lines
+                        tokens = line.strip().split()
+                        if len(bias_positions) == len(force_constants) == 0:
+                            dim = len(tokens)/2
+                        else:
+                            if len(tokens)/2 != dim:
+                                self._exit('Bad harmonic bias specification on'
+                                           ' line %d of %s'%(i+1,bias_filename))
+                        bias_positions.append(
+                            [float(r0) for r0 in tokens[0::2]])
+                        force_constants.append(
+                            [float(k0) for k0 in tokens[1::2]])
+            except IOError:
+                self._exit('Problem reading BIAS_FILE = %s'%bias_filename)
+
+        elif (self.keywords.get('FORCE_CONSTANTS') is not None
+              and self.keywords.get('BIAS_POSITIONS') is not None):
+            force_constants = _parse_state_params(
+                self.keywords.get('FORCE_CONSTANTS'))
+            bias_positions = _parse_state_params(
+                self.keywords.get('BIAS_POSITIONS'))
+        else:
+            self._exit('No bias specifications! Either BIAS_FILE or '
+                       'BIAS_POSITIONS and FORCE_CONSTANTS must be specified.')
+
+        nR0 = len(bias_positions)
+        nK0 = len(force_constants)
         if nR0 != nK0:
-            self._exit('Number of FORCE_CONSTANTS not equal to number of'
-                       ' BIAS_POSITIONS')
-        if nR0 != n or nK0 != n:
-            self._exit('Expected %d umbrella parameter sets, but instead found'
-                       ' %d FORCE_CONSTANTS and %d BIAS_POSITIONS'%(n,nK0,nR0))
-                   
+            self._exit('Number of FORCE_CONSTANTS not equal to number of '
+                       'BIAS_POSITIONS')
+        if nR0 != self.nreplicas or nK0 != self.nreplicas:
+            self._exit('Expected %d umbrella parameter sets, but instead found '
+                       '%d FORCE_CONSTANTS and %d BIAS_POSITIONS'
+                       %(self.nreplicas,nK0,nR0))
+        
         # Look for a restraint template (try the basename?)
         if self.keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
             restraint_template = '%s.RST'%self.basename
@@ -72,7 +108,8 @@ class amberus_async_re_job(pj_amber_job):
         for n,state in enumerate(self.states):
             state.add_restraints(restraint_template)
             state.mdin.set_namelist_value('DISANG',DISANG_NAME,None)
-            state.rstr.set_restraint_params(r0=posbias[n],k0=kbias[n])
+            state.rstr.set_restraint_params(r0=bias_positions[n],
+                                            k0=force_constants[n])
   
     def _computeSwapMatrix(self, replicas, states):
         """
