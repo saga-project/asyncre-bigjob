@@ -555,8 +555,8 @@ class async_re_job(object):
 # a subset of the n replicas. This list is passed in the 'replicas_waiting'
 # list. Replica i ('repl_i') is assumed to be in this list.
 #
-    def _gibbs_re_j(self, repl_i, sid_i, replicas_waiting, states_waiting, U):
-        n = len(replicas_waiting)
+    def _gibbs_re_j(self, repl_i, sid_i, replicas, states, U):
+        n = len(replicas)
         if n < 2:
             return repl_i
         #evaluate all i-j swap probabilities
@@ -564,11 +564,7 @@ class async_re_job(object):
         du = zeros(n)
         eu = zeros(n)
         #
-        # sid_i = self.status[repl_i]['stateid_current'] 
-        #for j in range(n):
-        for j,repl_j,sid_j in zip(range(len(replicas_waiting)),replicas_waiting,states_waiting):
-#            repl_j = replicas_waiting[j]
-#            sid_j = self.status[repl_j]['stateid_current']
+        for j,repl_j,sid_j in zip(range(n),replicas,states):
             du[j] = (U[sid_i][repl_j] + U[sid_j][repl_i] 
                      - U[sid_i][repl_i] - U[sid_j][repl_j])
         eu = exp(-du)
@@ -577,7 +573,7 @@ class async_re_job(object):
         i = -1
         f = 1./(float(n) - 1.)
         for j in range(n):
-            repl_j = replicas_waiting[j]
+            repl_j = replicas[j]
             if repl_j == repl_i:
                 i = j
             else:
@@ -591,10 +587,10 @@ class async_re_job(object):
         except IndexError:
             _exit('gibbs_re_j(): unrecoverable error: replica %d not in the '
                   'list of waiting replicas?'%i)
-        #index of swap replica within replicas_waiting list
+        #index of swap replica within replicas list
         j = self._weighted_choice_sub(ps)
         #actual replica
-        repl_j = replicas_waiting[j]
+        repl_j = replicas[j]
         return repl_j
 
     def doExchanges(self):
@@ -626,10 +622,10 @@ class async_re_job(object):
         for reps in range(mreps):
             for repl_i in replicas_to_exchange:
                 sid_i = self.status[repl_i]['stateid_current'] 
-                states_to_exchange = [self.status[repl_j]['stateid_current'] 
-                                      for repl_j in replicas_to_exchange]
+                curr_states = [self.status[repl_j]['stateid_current'] 
+                               for repl_j in replicas_to_exchange]
                 repl_j = self._gibbs_re_j(repl_i,sid_i,replicas_to_exchange,
-                                          states_to_exchange,U)
+                                          curr_states,U)
                 if repl_j != repl_i:
                     #Swap state id's
                     #Note that the energy matrix does not change
@@ -699,7 +695,6 @@ class async_re_job(object):
         Calculate the empirically observed distribution of state 
         permutations. Permutations not observed will NOT be counted.
         """
-        import copy
         try:
             self.npermt
         except (NameError,AttributeError):
