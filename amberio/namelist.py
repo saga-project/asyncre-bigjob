@@ -67,7 +67,10 @@ Example Usage:
  /
 
 """
-from collections import OrderedDict
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 import re
 
 __author__ = ('Tim Giese (TJG) - <giese@biomaps.rutgers.edu>\n'

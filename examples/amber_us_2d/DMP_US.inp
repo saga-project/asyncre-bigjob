@@ -1,13 +1,13 @@
  GB MD with umbrella restraint
  &cntrl
-  irest = 1, ntx = 5, nstlim = 2000, 
-  ntpr=500, ntwx = 0, ioutfm = 1, ntxo = 2,
+  irest = 1, ntx = 5, nstlim = 200000, 
+  ntpr=1000, ntwx = 0, ioutfm = 1, ntxo = 2,
   ntc = 2, ntf = 2, tol = 1e-08,
   ntt = 3, temp0 = 310.0, gamma_ln = 5.0, ig = -1,
   igb = 2, 
  /
  &wt 
-  type='DUMPFREQ', istep1=500 
+  type='DUMPFREQ', istep1=1000 
  /
  &wt 
   type='END' 

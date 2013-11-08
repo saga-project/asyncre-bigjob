@@ -12,15 +12,45 @@ import os
 import sys
 import time
 import pickle
-import random
 import copy
-
-from numpy import *
+import random
+from numpy import zeros, exp, sum
 from configobj import ConfigObj
 
 from pilot import PilotComputeService, ComputeDataService, State
 
 __version__ = '0.2.1'
+
+def _exit(message):
+    """Print and flush a message to stdout and then exit."""
+    print message
+    sys.stdout.flush()
+    print 'exiting...'
+    sys.exit(1)
+
+def _open(name, mode, max_attempts = 100, wait_time = 1):
+    """
+    Convenience function for opening files on an unstable filesystem.
+    
+    max_attempts : int
+        maximum number of attempts to make at opening a file
+    wait_time : int
+        time (in seconds) to wait between attempts
+    """
+    attempts = 0
+    f = None
+    while f is None and attempts <= max_attempts:
+        try:
+            f = open(name,mode)
+        except IOError:
+            print ('Warning: unable to access file %s, re-trying in %d '
+                   'second(s)...'%(name,wait_time))
+            f = None
+            attempts += 1
+            time.sleep(wait_time)
+    if attempts > max_attempts:
+        _exit('Too many failures accessing file %s'%name)
+    return f
 
 class async_re_job(object):
     """
@@ -33,6 +63,12 @@ class async_re_job(object):
         self._parseInputFile()
         self._checkInput()
         self._printStatus()
+
+    def _exit(self, message):
+        _exit(message)
+
+    def _openfile(self, name, mode, max_attempts = 100):
+        _open(name,mode,max_attempts)
 
     def __getattribute__(self, name):
         if name == 'replicas_waiting':
@@ -59,17 +95,6 @@ class async_re_job(object):
         else:
             return object.__getattribute__(self,name)
 
-    def _error(self, text):
-        """Print and flush an error message to stdout."""
-        print text
-        sys.stdout.flush()
-    
-    def _exit(self, text):
-        """Print an error message and exit."""
-        self._error(text)
-        print 'exiting...'
-        sys.exit(1)
-
     def _parseInputFile(self):
         """Read keywords from a configure file."""
         self.keywords = ConfigObj(self.command_file)
@@ -80,22 +105,6 @@ class async_re_job(object):
         print 'jobname =',self.jobname
         for k,v in self.keywords.iteritems():
             print k,v
-
-    def _openfile(self, name, mode, max_attempts = 100):
-        attempts = 0
-        f = None
-        while not f and attempts <= max_attempts:
-            try:
-                f = open(name,mode)
-            except IOError:
-                print ('Warning: unable to access file %s, re-trying in 1 '
-                       'second ...')%name
-                f = None
-                attempts += 1
-                time.sleep(1)
-        if attempts > max_attempts:
-            self._exit('Too many failures accessing file %s: quitting.'%name)
-        return f
 
     def _checkInput(self):
         """ 
@@ -111,7 +120,7 @@ class async_re_job(object):
         # execution time in minutes
         self.walltime = float(self.keywords.get('WALL_TIME'))
         if self.walltime is None:
-            self._exit('WALL_TIME needs to be specified')
+            self._exit('WALL_TIME (in minutes) needs to be specified')
         # variables required for PilotJob
         if self.keywords.get('COORDINATION_URL') is None:
             self._exit('COORDINATION_URL needs to be specified')
@@ -120,7 +129,13 @@ class async_re_job(object):
         if self.keywords.get('QUEUE') is None:
             self._exit('QUEUE needs to be specified')
         if self.keywords.get('BJ_WORKING_DIR') is None:
-            self._exit('BJ_WORKING_DIR needs to be specified')
+            basedir = os.getcwd()
+        else:
+            basedir = self.keywords.get('BJ_WORKING_DIR')
+        self.bj_working_dir = os.path.join(basedir,'agent') 
+        if not os.path.exists(self.bj_working_dir):
+            os.mkdir(self.bj_working_dir)
+
         if self.keywords.get('TOTAL_CORES') is None:
             self._exit('TOTAL_CORES needs to be specified')
         if self.keywords.get('SUBJOB_CORES') is None:
@@ -129,19 +144,22 @@ class async_re_job(object):
         # Optional variables
         #
         # processors per node on this machine (can be auto-detected)
-        self.ppn = 1
         if self.keywords.get('PPN') is not None: 
             self.ppn = int(self.keywords.get('PPN'))
+        else:
+            self.ppn = 1
         # spmd_variation for PilotJob (may override this later)
-        self.spmd = 'single'
         if self.keywords.get('SPMD') is not None: 
             self.spmd = self.keywords.get('SPMD')
+        else:
+            self.spmd = 'single'
         # number of replicas (may be determined by other means)
         self.nreplicas = None
         
-        self.nexchg_rounds = 1
         if self.keywords.get('NEXCHG_ROUNDS') is not None:
             self.nexchg_rounds = int(self.keywords.get('NEXCHG_ROUNDS'))
+        else:
+            self.nexchg_rounds = 1
 
         #examine RESOURCE_URL to see if it's remote (file staging)
 #        self.remote = self._check_remote_resource(self.keywords.get('RESOURCE_URL'))
@@ -165,9 +183,11 @@ class async_re_job(object):
         else:
             self.extfiles = None
         # verbose printing
-        self.verbose = False
         if self.keywords.get('VERBOSE').lower() == 'yes': 
             self.verbose = True
+        else:
+            self.verbose = False
+
 
     def _linkReplicaFile(self, link_filename, real_filename, repl):
         """
@@ -210,8 +230,8 @@ class async_re_job(object):
             for k in range(self.nreplicas):
                 repl_dir = 'r%d'%k
                 if os.path.exists(repl_dir):
-                    self._exit('Replica directories already exist. Either '
-                               'turn off RE_SETUP or remove the directories.')
+                    _exit('Replica directories already exist. Either turn off '
+                          'RE_SETUP or remove the directories.')
                 else:
                     os.mkdir('r%d'%k)
             # create links for external files
@@ -239,8 +259,8 @@ class async_re_job(object):
         #at this point all replicas should be in wait state
         for k in range(self.nreplicas):
             if self.status[k]['running_status'] != 'W':
-                self._exit('Internal error after restart. Not all jobs are in '
-                           'wait state.')
+                _exit('Internal error after restart. Not all jobs are in wait '
+                      'state.')
 
     def scheduleJobs(self):
         # wait until bigjob enters executing
@@ -311,7 +331,7 @@ class async_re_job(object):
 	#pilotjob: Variables defined in command.inp
         pcd = {'service_url': self.keywords.get('RESOURCE_URL'),
                'number_of_processes': self.keywords.get('TOTAL_CORES'),
-               'working_directory': self.keywords.get('BJ_WORKING_DIR'),
+               'working_directory': self.bj_working_dir,
                'queue': self.keywords.get('QUEUE'),
                'processes_per_node': self.ppn,
                'project': self.keywords.get('PROJECT'),
@@ -327,22 +347,19 @@ class async_re_job(object):
         
     def _write_status(self):
         """
-        Saves the current state of the RE job in the BASENAME.stat file using 
-        pickle
+        Pickle the current state of the RE job and write to in BASENAME.stat. 
         """
         status_file = '%s.stat'%self.basename
-        f = self._openfile(status_file,'w')
+        f = _open(status_file,'w')
         pickle.dump(self.status,f)
-        #pickle.dump(self.node_status, f)
         f.close()
 
     def _read_status(self):
         """
-        Loads the current state of the RE job from BASENAME.stat file using 
-        pickle
+        Unpickle and load the current state of the RE job from BASENAME.stat.
         """
         status_file = '%s.stat'%self.basename
-        f = self._openfile(status_file,'r')
+        f = _open(status_file,'r')
         self.status = pickle.load(f)
         f.close()
 
@@ -362,7 +379,7 @@ class async_re_job(object):
         log += 'Waiting = %d\n'%self.waiting
 
         logfile = '%s_stat.txt'%self.basename
-        ofile = self._openfile(logfile,'w')
+        ofile = _open(logfile,'w')
         ofile.write(log)
         ofile.close()
 
@@ -488,8 +505,8 @@ class async_re_job(object):
 
     def launchJobs(self):
         """
-        Scans the replicas in wait state and randomly launches some of them
-        if CPU's are available.
+        Scan the replicas in wait state and randomly launch some of them if 
+        CPU's are available.
         """ 
         jobs_to_launch = self._njobs_to_run()
         if jobs_to_launch > 0:
@@ -505,9 +522,9 @@ class async_re_job(object):
                     self._launchReplica(k,self.status[k]['cycle_current']))
                 self.status[k]['running_status'] = 'R'
 
-# gives random choice from a set with weight probabilities
     def _weighted_choice_sub(self,weights):
-        rnd = random.random() * sum(weights)
+        # return a random choice from a set with weighted probabilities
+        rnd = random.random()*sum(weights)
         for i, w in enumerate(weights):
             rnd -= w
             if rnd < 0:
@@ -538,7 +555,7 @@ class async_re_job(object):
 # a subset of the n replicas. This list is passed in the 'replicas_waiting'
 # list. Replica i ('repl_i') is assumed to be in this list.
 #
-    def _gibbs_re_j(self, repl_i, replicas_waiting, U):
+    def _gibbs_re_j(self, repl_i, sid_i, replicas_waiting, states_waiting, U):
         n = len(replicas_waiting)
         if n < 2:
             return repl_i
@@ -547,12 +564,13 @@ class async_re_job(object):
         du = zeros(n)
         eu = zeros(n)
         #
-        sid_i = self.status[repl_i]['stateid_current'] 
-        for j in range(n):
-            repl_j = replicas_waiting[j]
-            sid_j = self.status[repl_j]['stateid_current']
+        # sid_i = self.status[repl_i]['stateid_current'] 
+        #for j in range(n):
+        for j,repl_j,sid_j in zip(range(len(replicas_waiting)),replicas_waiting,states_waiting):
+#            repl_j = replicas_waiting[j]
+#            sid_j = self.status[repl_j]['stateid_current']
             du[j] = (U[sid_i][repl_j] + U[sid_j][repl_i] 
-                  - U[sid_i][repl_i] - U[sid_j][repl_j])
+                     - U[sid_i][repl_i] - U[sid_j][repl_j])
         eu = exp(-du)
         #
         pii = 1.0
@@ -570,8 +588,9 @@ class async_re_job(object):
                 pii -= ps[j]
         try:
             ps[i] = pii
-        except:
-            self._exit('gibbs_re_j(): unrecoverable error: replica i not in the list of waiting replicas?')
+        except IndexError:
+            _exit('gibbs_re_j(): unrecoverable error: replica %d not in the '
+                  'list of waiting replicas?'%i)
         #index of swap replica within replicas_waiting list
         j = self._weighted_choice_sub(ps)
         #actual replica
@@ -579,107 +598,112 @@ class async_re_job(object):
         return repl_j
 
     def doExchanges(self):
-        """
-        Perform n rounds of exchanges among waiting replicas using Gibbs 
-        sampling.
-        """
-        print 'Entering doExchanges Method: %f'%time.time()
+        """Perform exchanges among waiting replicas using Gibbs sampling."""
+        # NB: asking for self.replicas_waiting_to_exchange UPDATES the list,
+        # therefore this must be kept static at each repetition.
+        #
+        replicas_to_exchange = copy.deepcopy(self.replicas_waiting_to_exchange)
+        states_to_exchange = copy.deepcopy(self.states_waiting_to_exchange)
+        nreplicas_exchanging = len(replicas_to_exchange)
+        if nreplicas_exchanging < 2:
+            return 0
 
-        # find out which replicas are waiting
-        replicas_waiting = self.replicas_waiting_to_exchange
-        states_waiting = self.states_waiting_to_exchange
-        if len(replicas_waiting) > 1:
-            # backtrack cycle
-            for k in replicas_waiting:
-                self.status[k]['cycle_current'] -= 1
-                self.status[k]['running_status'] = 'E'
-            # Matrix of replica energies in each state.
-            # The computeSwapMatrix() function is defined by application 
-            # classes (Amber/US, Impact/BEDAM, etc.)
-            U = self._computeSwapMatrix(replicas_waiting,states_waiting)
-            # Perform an exchange for each of the n replicas, m times
-            # Perform an exchange for each of the n replicas, m times
-            if self.nexchg_rounds >= 0:
-                mreps = self.nexchg_rounds
-            else:
-                mreps = len(replicas_waiting)**(-self.nexchg_rounds)
-            for reps in range(mreps):
-                for repl_i in replicas_waiting:
-                    repl_j = self._gibbs_re_j(repl_i,replicas_waiting,U)
-                    if repl_j != repl_i:
-                        #Swap state id's
-                        #Note that the energy matrix does not change
-                        sid_i = self.status[repl_i]['stateid_current'] 
-                        sid_j = self.status[repl_j]['stateid_current']
-                        self.status[repl_i]['stateid_current'] = sid_j
-                        self.status[repl_j]['stateid_current'] = sid_i
+        print 'Initiating exchanges amongst %d replicas...'%nreplicas_exchanging
+        exchange_start_time = time.time()
+        # backtrack cycle of waiting replicas
+        for k in replicas_to_exchange:
+            self.status[k]['cycle_current'] -= 1
+            self.status[k]['running_status'] = 'E'
+        # Matrix of replica energies in each state.
+        # The computeSwapMatrix() function is defined by application 
+        # classes (Amber/US, Impact/BEDAM, etc.)
+        U = self._computeSwapMatrix(replicas_to_exchange,states_to_exchange)
+        # Perform an exchange for each of the n replicas, m times
+        if self.nexchg_rounds >= 0:
+            mreps = self.nexchg_rounds
+        else:
+            mreps = nreplicas_exchanging**(-self.nexchg_rounds)
+        for reps in range(mreps):
+            for repl_i in replicas_to_exchange:
+                sid_i = self.status[repl_i]['stateid_current'] 
+                states_to_exchange = [self.status[repl_j]['stateid_current'] 
+                                      for repl_j in replicas_to_exchange]
+                repl_j = self._gibbs_re_j(repl_i,sid_i,replicas_to_exchange,
+                                          states_to_exchange,U)
+                if repl_j != repl_i:
+                    #Swap state id's
+                    #Note that the energy matrix does not change
+                    sid_i = self.status[repl_i]['stateid_current'] 
+                    sid_j = self.status[repl_j]['stateid_current']
+                    self.status[repl_i]['stateid_current'] = sid_j
+                    self.status[repl_j]['stateid_current'] = sid_i
 
 # Uncomment to debug Gibbs sampling: actual and computed populations of 
 # state permutations should match
 # 
-#                     self._debug_collect_state_populations(replicas_waiting,U)
-#             self._debug_validate_state_populations(replicas_waiting,U)
+        #         self._debug_collect_state_populations(replicas_to_exchange)
+        # self._debug_validate_state_populations(replicas_to_exchange,U)
 
             # write input files
-            for k in replicas_waiting:
-                # Creates new input file for the next cycle
-                # Places replica back into "W" (wait) state 
-                self.status[k]['cycle_current'] += 1
-                self._buildInpFile(k)
-                self.status[k]['running_status'] = 'W'
+        for k in replicas_to_exchange:
+            # Creates new input file for the next cycle
+            # Places replica back into "W" (wait) state 
+            self.status[k]['cycle_current'] += 1
+            self._buildInpFile(k)
+            self.status[k]['running_status'] = 'W'
 
-        print 'Exiting doExchanges Method: %f'%time.time()
+        print 'Total exchange time = %f s'%(time.time()-exchange_start_time)
 
 
-    def _check_remote_resource(self, resource_url):
-        """
-        check if it's a remote resource. Basically see if 'ssh' is present
-        """
-        ssh_c = re.compile("(.+)\+ssh://(.*)")
-        m = re.match(ssh_c, resource_url)
-        if m:
-            self.remote_protocol = m.group(1)
-            self.remote_server = m.group(2)
-            print resource_url + " : yes" + " " + remote_protocol + " " + remote_server
-            return 1
-        else:
-            print resource_url + " : no"
-            return 0
+#     def _check_remote_resource(self, resource_url):
+#         """
+#         check if it's a remote resource. Basically see if 'ssh' is present
+#         """
+#         ssh_c = re.compile("(.+)\+ssh://(.*)")
+#         m = re.match(ssh_c, resource_url)
+#         if m:
+#             self.remote_protocol = m.group(1)
+#             self.remote_server = m.group(2)
+#             print resource_url + " : yes" + " " + remote_protocol + " " + remote_server
+#             return 1
+#         else:
+#             print resource_url + " : no"
+#             return 0
 
-    def _setup_remote_workdir(self):
-        """
-        rsync local working directory with remote working directory
-        """
-        os.system("ssh %s mkdir -p %s" % (self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
-        extfiles = " "
-        for efile in self.extfiles:
-            extfiles = extfiles + " " + efile
-        os.system("rsync -av %s %s/%s/" % (extfiles, self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
+#     def _setup_remote_workdir(self):
+#         """
+#         rsync local working directory with remote working directory
+#         """
+#         os.system("ssh %s mkdir -p %s" % (self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
+#         extfiles = " "
+#         for efile in self.extfiles:
+#             extfiles = extfiles + " " + efile
+#         os.system("rsync -av %s %s/%s/" % (extfiles, self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
 
-        dirs = ""
-        for k in range(self.nreplicas):
-            dirs = dirs + " r%d" % k
-        setup_script = """
-cd %s ; \
-for i in `seq 0 %d` ; do \
-mkdir -p r$i ; \
+#         dirs = ""
+#         for k in range(self.nreplicas):
+#             dirs = dirs + " r%d" % k
+#         setup_script = """
+# cd %s ; \
+# for i in `seq 0 %d` ; do \
+# mkdir -p r$i ; \
  
 
 
 
 
-"""
+# """
       
-    def _debug_collect_state_populations(self, replicas, U):
+    def _debug_collect_state_populations(self, replicas):
         """
         Calculate the empirically observed distribution of state 
         permutations. Permutations not observed will NOT be counted.
         """
+        import copy
         try:
             self.npermt
         except (NameError,AttributeError):
             self.npermt = {}
-  
         try:
             self.permt
         except (NameError,AttributeError):
@@ -691,27 +715,7 @@ mkdir -p r$i ; \
             self.npermt[curr_perm] += 1
         else:
             self.npermt[curr_perm] = 1
-            self.permt[curr_perm] = copy(curr_states)
-        
-        #state id list
-        # sids = [ self.status[k]['stateid_current'] for k in replicas]
-
-        # try:
-        #     self=perme0            
-        # except:
-        #     e = 0
-        #     i = 0
-        #     for repl in replicas:
-        #         e += U[sids[i]][repl]
-        #         i += 1
-        #     self.perme0 = e
-
-        # key = str(sids)
-        # if self.npermt.has_key(key):
-        #     self.npermt[key] += 1
-        # else:
-        #     self.npermt[key] = 1
-        #     self.permt[key] = sids[:]
+            self.permt[curr_perm] = copy.copy(curr_states)
 
     def _debug_validate_state_populations(self, replicas, U):
         """
@@ -726,6 +730,7 @@ mkdir -p r$i ; \
         emp_k is 0 (the state is not observed) it is set to 1e-4. Although 
         this introduces an arbitrary bias, it makes DKL always well-defined.
         """
+        import math
         from itertools import permutations
 
         # list of the currently occuplied states
@@ -779,29 +784,5 @@ mkdir -p r$i ; \
         print ('%8s %9.4f %9.4f (sum) Kullback-Liebler Divergence = %f'
                %('',sum1,sum2,DKL))
         print '='*80
-        
-        # ss = 0
-        # for k in self.npermt.keys():
-        #     ss += self.npermt[k]
-        # ps = []
-        # sumps = 0
-        # for k in self.npermt.keys():
-        #     sids = self.permt[k]
-        #     e = 0
-        #     i = 0
-        #     for repl in replicas:
-        #         e += U[sids[i]][repl]
-        #         i += 1
-        #     p = math.exp(-(e-self.perme0))
-        #     ps.append(p)
-        #     sumps += p
-
-        # i = 0
-        # for k in self.npermt.keys():
-        #     print k, self.npermt[k]/float(ss), ps[i]/sumps
-        #     i += 1
-
-        # sys.exit(0)
-
             
             

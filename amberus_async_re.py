@@ -1,6 +1,7 @@
 import os
 
-from amber_async_re import *
+import amberio.ambertools as at
+from amber_async_re import pj_amber_job, DISANG_NAME, DUMPAVE_EXT, _exit
 
 def _parse_state_params(paramline, state_delimiter=':'):
     """
@@ -22,6 +23,35 @@ def _parse_state_params(paramline, state_delimiter=':'):
                   for state in paramline.split(state_delimiter)]
     return params
 
+def _parse_bias_file(bias_filename):
+    """
+    Return a list of bias positions and force constants from a "bias file" of 
+    the format:
+
+    bias_position1 force_constant1 bias_position2 force_constant2 ...
+
+    where any number of bias specifications are permitted. 
+    """
+    bias_positions = []
+    force_constants = []
+    for i,line in enumerate(open(bias_filename,'r')):
+        try:
+            line = line[:line.index('#')] # ignore comments
+        except ValueError:
+            pass
+        if len(line) > 0: # ignore empty lines
+            tokens = line.strip().split()
+            if len(bias_positions) == len(force_constants) == 0:
+                dim = len(tokens)/2
+            else:
+                if len(tokens)/2 != dim:
+                    _exit('Bad harmonic bias specification on line %d of %s'
+                          %(i+1,bias_filename))
+            bias_positions.append([float(r0) for r0 in tokens[0::2]])
+            force_constants.append([float(k0) for k0 in tokens[1::2]])
+    return bias_positions,force_constants
+
+
 class amberus_async_re_job(pj_amber_job):
 
     def _checkInput(self):
@@ -32,49 +62,19 @@ class amberus_async_re_job(pj_amber_job):
         #
         temp0 = self._state_params_are_same('temp0','cntrl')
         if not temp0:
-            self._exit('All temperatures MUST be the same when using AMBERUS.')
-        self.beta = 1./(KB*temp0)
+            _exit('All temperatures MUST be the same when using AMBER-US.')
+        self.beta = 1./(at.KB*temp0)
 
-        """ 
-        Umbrella Sampling Parameters
         
-        These can be read in two ways: 
-        1) from a file specified in the configure file as BIAS_FILE 
-        containing nreplica rows with entries of the form:
-        
-        bias_position1 force_constant1 bias_position2 force_constant2 ...
-        
-        or
-        
-        2) from strings in the configure file set equal to BIAS_POSITIONS and 
-        FORCE_CONSTANTS. These are parsed differently in one and higher 
-        dimensions (comma or comma/colon delimited, see '_parse_state_params').
-        """
+        # Umbrella Sampling Parameters
+        #
         bias_filename = self.keywords.get('BIAS_FILE')
         if bias_filename is not None:
             try:
-                bias_positions = []
-                force_constants = []
-                for i,line in enumerate(open(bias_filename,'r')):
-                    try:
-                        line = line[:line.index('#')] # ignore comments
-                    except ValueError:
-                        pass
-                    if len(line) > 0: # ignore empty lines
-                        tokens = line.strip().split()
-                        if len(bias_positions) == len(force_constants) == 0:
-                            dim = len(tokens)/2
-                        else:
-                            if len(tokens)/2 != dim:
-                                self._exit('Bad harmonic bias specification on'
-                                           ' line %d of %s'%(i+1,bias_filename))
-                        bias_positions.append(
-                            [float(r0) for r0 in tokens[0::2]])
-                        force_constants.append(
-                            [float(k0) for k0 in tokens[1::2]])
+                bias_positions,force_constants = \
+                    _parse_bias_file(bias_filename)
             except IOError:
-                self._exit('Problem reading BIAS_FILE = %s'%bias_filename)
-
+                _exit('Problem reading BIAS_FILE = %s'%bias_filename)
         elif (self.keywords.get('FORCE_CONSTANTS') is not None
               and self.keywords.get('BIAS_POSITIONS') is not None):
             force_constants = _parse_state_params(
@@ -82,18 +82,17 @@ class amberus_async_re_job(pj_amber_job):
             bias_positions = _parse_state_params(
                 self.keywords.get('BIAS_POSITIONS'))
         else:
-            self._exit('No bias specifications! Either BIAS_FILE or '
-                       'BIAS_POSITIONS and FORCE_CONSTANTS must be specified.')
+            _exit('No bias specifications! Either BIAS_FILE or BIAS_POSITIONS '
+                  'and FORCE_CONSTANTS must be specified.')
 
-        nR0 = len(bias_positions)
-        nK0 = len(force_constants)
-        if nR0 != nK0:
-            self._exit('Number of FORCE_CONSTANTS not equal to number of '
-                       'BIAS_POSITIONS')
-        if nR0 != self.nreplicas or nK0 != self.nreplicas:
-            self._exit('Expected %d umbrella parameter sets, but instead found '
-                       '%d FORCE_CONSTANTS and %d BIAS_POSITIONS'
-                       %(self.nreplicas,nK0,nR0))
+        if len(bias_positions) != len(force_constants):
+            _exit('Number of FORCE_CONSTANTS not equal to number of '
+                  'BIAS_POSITIONS')
+        if (len(bias_positions) != self.nreplicas 
+            or len(force_constants) != self.nreplicas):
+            _exit('Expected %d umbrella parameter sets, but instead found '
+                  '%d FORCE_CONSTANTS and %d BIAS_POSITIONS'
+                  %(self.nreplicas,len(force_constants),len(bias_positions)))
         
         # Look for a restraint template (try the basename?)
         if self.keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
@@ -162,36 +161,31 @@ class amberus_async_re_job(pj_amber_job):
 
 
 if __name__ == '__main__':
-    import sys, time
+    import sys
+    import time
 
     BIGJOB_VERBOSE=100
 
     start_time = time.time()
-    
-    # Parse arguments:
-    usage = "%prog <ConfigFile>"
-    
-    if len(sys.argv) != 2:
-        print "Please specify ONE input file"
+    try:
+        command_file = sys.argv[1]
+    except IndexError:
+        print 'usage: amberus_async_re.py command_file'
         sys.exit(1)
-    
-    commandFile = sys.argv[1]
+    if len(sys.argv) > 2:
+        print 'Ignoring extra option(s):' + ' '.join(sys.argv[2:])
 
-    print ""
-    print "===================================="
-    print "AMBER Asynchronous Replica Exchange "
-    print "===================================="
-    print ""
-    print "Started at: " + str(time.asctime())
-    print "Input file:", commandFile
-    print ""
+    print 
+    print '======================================'
+    print 'AMBER-US Asynchronous Replica Exchange'
+    print '======================================'
+    print 
+    print 'Started at: ' + str(time.asctime())
+    print 'Input file:', command_file
+    print 
     sys.stdout.flush()
-
-    rx = amberus_async_re_job(commandFile, options=None)
-
+    rx = amberus_async_re_job(command_file, options=None)
     rx.setupJob()
-
     rx.scheduleJobs()
-
     total_run_time = time.time() - start_time
-    print "Total Run Time: %f"%float(total_run_time)
+    print 'Total Run Time: %f'%float(total_run_time)

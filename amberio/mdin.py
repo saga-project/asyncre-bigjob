@@ -16,7 +16,10 @@ Exported Classes:
     AmberMdin     A list of AmberNamelists
 
 """
-from collections import OrderedDict
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 
 from namelist import *
 
