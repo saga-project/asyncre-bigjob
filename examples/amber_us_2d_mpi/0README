@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-NREPLICAS=12
+NREPLICAS=6
 
 #
 # The following makes a directory called "inpcrds" and populates it with unique
