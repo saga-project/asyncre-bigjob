@@ -16,12 +16,9 @@ Exported Classes:
     AmberMdin     A list of AmberNamelists
 
 """
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
+import sys
 
-from namelist import *
+from namelist import Namelist,NamelistCollection,separate_namelists
 
 __author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
 
@@ -34,29 +31,61 @@ def read_amber_mdin(mdin_name, engine='sander'):
     # of AmberNamelists (with assigned defaults). Parse the remaining lines for
     # title information and NMR variables (a NoneType AmberNamelist).
     namelists,other_lines = separate_namelists(mdin_name)
-    namelists = [AmberNamelist(nl.name,engine,**nl) for nl in namelists] 
+    if namelists.first_match('cntrl') is not None:
+        cntrl = namelists.first_match('cntrl')
+    else:
+        cntrl = {}
+    if namelists.first_match('ewald') is not None:
+        ewald = namelists.first_match('ewald')
+    else:
+        ewald = {}
+    if namelists.first_match('qmmm') is not None:
+        qmmm = namelists.first_match('qmmm')
+    else:
+        qmmm = {}
+    if namelists.first_match('pb') is not None:
+        pb = namelists.first_match('pb')
+    else:
+        pb = {}
+    if namelists.first_match('debugf') is not None:
+        debugf = namelists.first_match('debugf')
+    else:
+        debugf = {}
+    wts = [m for m in namelists.matches('wt')]
+
     title = ''
-    nmr_vars = AmberNamelist(None,engine)
+    nmr_vars = {}
     for line in other_lines:
+        try:
+            line = line[:line.index('!')]
+        except ValueError:
+            pass
         tokens = line.split('=')
         if len(tokens) > 1:
             nmr_vars[tokens[0].strip()] = tokens[1].strip()
         else:
             title += line.strip() + '\n'
-    namelists.append(nmr_vars)
-    return AmberMdin(title,engine,*namelists)
+    return AmberMdin(title,cntrl,ewald,qmmm,pb,debugf,wts,nmr_vars,engine)
 
+UNIQUE_NAMELISTS = ['cntrl','ewald','qmmm','pb','debugf']
 
-class AmberMdin(NamelistCollection):
+class AmberMdin(object):
     """
     List of AmberNamelist objects providing easy access to the data in an
     AMBER mdin file.
     """
-    def __init__(self, title='', engine='sander', *amber_nls):
-        NamelistCollection.__init__(self,*amber_nls)
+    def __init__(self, title='', cntrl={}, ewald={}, qmmm={}, pb={}, debugf={},
+                 wts=[], nmr_vars={}, engine='sander'):
         self.title = str(title)
+        self.cntrl = AmberNamelist('cntrl',engine,**cntrl)
+        self.ewald = AmberNamelist('ewald',engine,**ewald)
+        self.qmmm = AmberNamelist('qmmm',engine,**qmmm)
+        self.pb = AmberNamelist('pb',engine,**pb)
+        self.debugf = AmberNamelist('debugf',engine,**debugf)
+        self.wts = AmberWtList(*[AmberNamelist('wt',engine,**w) for w in wts])
+        self.nmr_vars = AmberNamelist(None,engine,**nmr_vars)
         self.engine = str(engine)
-        
+
     def __str__(self):
         # Format mdin file output as follows:
         # 1 - title lines
@@ -65,72 +94,26 @@ class AmberMdin(NamelistCollection):
         # 4 - variables that belong to no namelist (e.g. DISANG)
         #
         txt = '%s\n'%self.title.rstrip()
-        for nl in self.does_not_match('wt',None):
-            txt += str(nl)
-        end_txt = ''
-        for nl in self.matches('wt'):
-            if '%s'%str(nl['type']).upper() != "'END'":
-                txt += str(nl)
-            else:
-                end_txt = str(nl) 
-        txt += end_txt
-        if self.first_match(None) is not None:
-            txt += str(self.first_match(None))
+        txt += str(self.cntrl)
+        txt += str(self.ewald)
+        txt += str(self.qmmm)
+        txt += str(self.pb)
+        txt += str(self.debugf)
+        txt += str(self.wts)
+        txt += str(self.nmr_vars)
         return txt
 
     def __setattr__(self, name, value):
         object.__setattr__(self,name,value)
         if name == 'engine':
-            for namelist in self:
-                namelist.engine = self.engine
-
-    def append(self, item):
-        if not isinstance(item,AmberNamelist):
-            raise TypeError('AmberMdin objects must contain AmberNamelists!')
-        if hasattr(self,'engine'):
-            item.engine = self.engine
-        NamelistCollection.append(self,item)
-
-    def namelist_value(self, variable, namelist, wt_type=None):
-        """
-        Return the value of a variable from a given namelist. 
-        
-        Notes:
-        - NMR variables belong to a namelist with name None.
-        - &wt namelists need a 'type' for unique determination.
-        - Unset variables with no default will return as None.
-        - String values require double literals (e.g. 'str' --> "'str'").
-        """
-        for nl in self.matches(namelist):
-            if nl.has_key(variable):
-                # Most namelists are uniquely defined by their name.
-                if wt_type is None:
-                    return nl[variable]
-                # There may be multiple wt namelists with different type's
-                elif nl['type'] == wt_type:
-                    return nl[variable]
-
-    def set_namelist_value(self, variable, value, namelist, wt_type=None):
-        """
-        Set the value of a variable from a given namelist. Return 1 if
-        successful, 0 otherwise.
-        
-        Notes:
-        - NMR variables belong to a namelist with name None.
-        - wt namelists need an additional identifier for the 'type' 
-          attribute.
-        - String values require double literals (e.g. 'str' --> "'str'").
-        """
-        for nl in self.matches(namelist):
-            if wt_type is None or nl['type'] == wt_type:
-                nl[variable] = value
-                return 1
-        # If the namelist of this variable does not exist, it must be made.
-        self.append(AmberNamelist(namelist,self.engine,**{variable:value}))
-        if wt_type is not None: 
-            self[-1]['type'] = wt_type
-            return 1
-        return 0
+            self.cntrl.engine = self.engine
+            self.ewald.engine = self.engine
+            self.qmmm.engine = self.engine
+            self.pb.engine = self.engine
+            self.debugf.engine = self.engine
+            for wt in self.wts:
+                wt.engine = self.engine
+            self.nmr_vars.engine = self.engine
 
     def write_amber_mdin(self, outfile, mode='w'):
         """
@@ -144,46 +127,95 @@ class AmberMdin(NamelistCollection):
         else:
             raise TypeError("'outfile' must be a string or file object.")
         outfile.write(str(self))
-             
+        if outfile != sys.stdout:
+            outfile.close()
      
+class AmberWtList(NamelistCollection):
+    """A list of AMBER &wt namelists.
+    """
+    def append(self, item):
+        if not isinstance(item,AmberNamelist) or item.name != 'wt':
+            raise TypeError('AmberWtLists must contain &wt AmberNamelists!')
+        NamelistCollection.append(self,item)
+
+    def set_end(self):
+        """Remove extra 'END' specifications and add a new one."""
+        for i,nl in enumerate(self):
+            if nl['type'] == "'END'":
+                self.pop(i)
+        self.append(AmberNamelist('wt','sander',**{'type': "'END'"}))
+
+    def type_matches(self, *types):
+        """
+        Return a generator of all wt namelists whose type matches any of the
+        arguments.
+        """
+        for nl in self:
+            for type in types:
+                if nl['type'] == type:
+                    yield nl
+
+    def first_type_match(self, type):
+        """
+        Return the first result from type_matches(). If there are no matches,
+        create a new namelist of that type and reset any 'END' specifications.
+        """
+        try:
+            return next(self.type_matches(*type))
+        except StopIteration:
+            # This happens if type_matches() returns an empty generator.
+            self.append(AmberNamelist('wt','sander',**{'type': "%s"%type}))
+            self.set_end()
+            # Not sure why calling self.first_type_match(type) here causes an
+            # infinite recursion problem...
+            #
+            for nl in self:
+                if nl['type'] == type:
+                    return nl
+           
+
 class AmberNamelist(Namelist):
     """
     An AmberNamelist is simply a Fortran namelist that also has defaults
     specific to the MD engine.
+
+    The current implementation only stores values that are explicitly set. If
+    an unset value is requested, a default value is set and returned (this may 
+    break if the default depends on another variable).
+
+    In order to be extendible, there is no checking for compatibility with 
+    different engines (e.g. you can set sander options for pmemd, even though
+    the input will fail). However, engine dependent defaults are supported 
+    (see above caveat).
     """
     def __init__(self, name, engine, *args, **kwargs):
         Namelist.__init__(self,name,line_prefix=' ',name_value_separator=' = ',
                           value_separator=', ',max_namevalues_per_line=72,
                           max_chars_per_line=72,*args,**kwargs)
         self.engine = engine
-
-    def __setattr__(self, name, value):
-        Namelist.__setattr__(self,name,value)
-        if name == 'engine':
-            self._set_defaults()
     
     def __str__(self):
-        if self.name is not None:
-            # Print only the the non-default values using normal formatting for
-            # a Namelist string.
-            return Namelist.__str__(Namelist(self.name,**self.non_defaults))
+        if len(self.keys()) > 0: # Don't print empty namelists.
+            if self.name is not None:
+                return Namelist.__str__(self)
+            else:
+                # Modify the Namelist print behavior for a NoneType namelist.
+                # Namely, don't print the "&name" section and ending slash.
+                return '\n'.join([' %s=%s'%(k,v) for k,v in self.iteritems()])
         else:
-            # Modify the Namelist print behavior for the NoneType namelist.
-            # Namely, don't print the "&name" section and ending slash.
-            return '\n'.join([' %s=%s'%(k,v) 
-                              for k,v in self.non_defaults.iteritems()])
+            return ''
 
-    def __getattribute__(self, name):
-        if name == 'non_defaults':
-            return OrderedDict((k,v) for k,v in self.iteritems() 
-                               if v != self.defaults[k])
-        else:
-            return Namelist.__getattribute__(self,name)
+    def __getitem__(self, key):
+        try:
+            return Namelist.__getitem__(self,key)
+        except KeyError:
+            self[key] = value = self.default(key)
+            return value
 
-    def _set_defaults(self):
+    def default(self, key):
         """Set the default variables for the MD engine (e.g. sander)."""
         sander_defaults = {
-            'debug': {
+            'debugf': {
                 'do_debugf': 0, 'dumpfrc': 0, 
                 'zerochg': 0, 'zerovdw': 0, 'zerodip': 0,
                 'do_dir': 1, 'do_rec': 1, 'do_adj': 1, 'do_self': 1, 
@@ -361,23 +393,19 @@ class AmberNamelist(Namelist):
             None: {'DISANG': None, 'DUMPAVE': 'fort.35', 'LISTIN': None, 
                    'LISTOUT': None}
             }
-
-        valid_namelists = sander_defaults.keys()
-        if self.name is None or self.name in valid_namelists:
-            if self.engine in ['sander','sander.MPI']: 
-                self.defaults = sander_defaults[self.name]
-            elif self.engine in ['pmemd','pmemd.MPI']:  
-                self.defaults = pmemd_defaults[self.name]
-            else: 
-                raise ValueError('Unable to set defaults for unknown engine %s'
-                                 %self.engine)
+        if self.engine in ['sander','sander.MPI']:
+            defaults = sander_defaults
         else:
-            raise ValueError('Unrecognized AMBER mdin namelist: %s'%self.name)
-
-        # Fill in missing values with the new default values.
-        for k,v in self.defaults.iteritems():
-            if not self.has_key(k):
-                self[k] = v
+            defaults = pmemd_defaults
+        try:
+            defaults[self.name]
+            try:
+                return defaults[self.name][key]
+            except KeyError:
+                raise KeyError('No default for variable %s in namelist %s'
+                               %(key,self.name))
+        except KeyError:
+            raise KeyError('No defaults for unknown namelist %s'%self.name)
 
 if __name__ == '__main__':
     import sys
@@ -419,10 +447,15 @@ if __name__ == '__main__':
     print '=== mdin test file:'
     print mdin_test
     print '==================='
-   
+
     try:
         print '>>> mdin_obj = read_amber_mdin(%s)'%test_name
         mdin_obj = read_amber_mdin(test_name)
+        temp0 = AmberNamelist('wt','sander',**{'type':"'TEMP0'",'istep1': 0})
+        mdin_obj.wts.append(temp0)
+        mdin_obj.wts.first_type_match("'DUMPFREQ'")['istep1'] = 10
+        mdin_obj.wts.set_end()
+        mdin_obj.nmr_vars['DISANG'] = 'bar.RST'
         print '>>> print mdin_obj'
         print mdin_obj
     finally:

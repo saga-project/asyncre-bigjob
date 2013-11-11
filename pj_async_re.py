@@ -510,8 +510,7 @@ class async_re_job(object):
         """ 
         jobs_to_launch = self._njobs_to_run()
         if jobs_to_launch > 0:
-            wait = [k for k in range(self.nreplicas) 
-                    if self.status[k]['running_status'] == 'W']
+            wait = self.replicas_waiting
             random.shuffle(wait)
             n = min(jobs_to_launch,len(wait))
             for k in wait[0:n]:

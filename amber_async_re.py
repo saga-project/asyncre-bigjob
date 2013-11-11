@@ -71,7 +71,7 @@ class pj_amber_job(async_re_job):
             rstr_file = 'r%d/%s'%(repl,DISANG_NAME)
             self.states[sid].rstr.write_amber_restraint_file(rstr_file,title)
             trace_file = '%s_%d.%s'%(self.basename,cyc,DUMPAVE_EXT)
-            self.states[sid].mdin.set_namelist_value('DUMPAVE',trace_file,None)
+            self.states[sid].mdin.nmr_vars['DUMPAVE'] = trace_file
         self.states[sid].mdin.write_amber_mdin('r%d/mdin'%repl)
         # Links
         prmtop = self.states[sid].filenames['prmtop']
@@ -152,9 +152,9 @@ class pj_amber_job(async_re_job):
         assumes that certain state parameters (e.g. temperature) are the
         same in all states.
         """
-        value = self.states[0].mdin.namelist_value(variable,namelist)
+        value = self.states[0].mdin.__getattribute__(namelist)[variable]
         for state in self.states[1:]:
-            this_value = state.mdin.namelist_value(variable,namelist)
+            this_value = state.mdin.__getattribute__(namelist)[variable]
             if this_value != value: 
                 return False
         return value

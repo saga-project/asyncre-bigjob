@@ -67,11 +67,12 @@ Example Usage:
  /
 
 """
+import re
 try:
     from collections import OrderedDict
 except ImportError:
+    # for earlier than python2.5?
     from ordereddict import OrderedDict
-import re
 
 __author__ = ('Tim Giese (TJG) - <giese@biomaps.rutgers.edu>\n'
               'Brian K. Radak (BKR) - <radakb@biomaps.rutgers.edu>')
@@ -193,8 +194,8 @@ class Namelist(OrderedDict):
             to_add = '%s%s%s%s'%(name,self.name_value_separator,value,
                                  self.value_separator)
             nvalues += 1
-            if (len(txt_buf+to_add) >= self.max_chars_per_line or
-                nvalues >= self.max_namevalues_per_line):
+            if (len(txt_buf+to_add) >= self.max_chars_per_line
+                or nvalues >= self.max_namevalues_per_line):
                 txt += txt_buf + '\n'
                 txt_buf = ' %s%s'%(self.line_prefix,to_add)
                 nvalues = 0
@@ -274,10 +275,10 @@ def _namelists_from_string(string):
             k,v = keyvals[i]
             v = re.sub(r"\,$",'',v)
             keyvals[i] = k,v
-        nlMap = OrderedDict()
+        nlMap = Namelist(nlName)
         for k,v in keyvals:
             nlMap[k.strip()] = _as_common_type(v.strip())
-        nlObjs.append(Namelist(nlName,**nlMap))
+        nlObjs.append(nlMap)
     return nlObjs
 
 def _non_namelists_from_string(string):

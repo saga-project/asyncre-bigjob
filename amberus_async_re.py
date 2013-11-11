@@ -102,11 +102,10 @@ class amberus_async_re_job(pj_amber_job):
         if self.verbose:
             print 'Using restraint template file: %s'%restraint_template
 
-        # Read the restraint template and then modify the restraint objects 
-        # based on the input. 
+        # Read the restraint template and then modify the restraint objects. 
         for n,state in enumerate(self.states):
             state.add_restraints(restraint_template)
-            state.mdin.set_namelist_value('DISANG',DISANG_NAME,None)
+            state.mdin.nmr_vars['DISANG'] = DISANG_NAME
             state.rstr.set_restraint_params(r0=bias_positions[n],
                                             k0=force_constants[n])
   
@@ -122,7 +121,7 @@ class amberus_async_re_job(pj_amber_job):
                        - beta[U_0(x_j) + U_i(x_j)] - beta[U_0(x_i) + U_j(x_i)]
                      =  beta[U_i(x_i) + U_i(x_j) - U_i(x_j) - U_j(x_i)]
         """
-        # U will be sparse matrix, but is convenient bc the indices of the
+        # U will be a sparse matrix, but is convenient bc the indices of the
         # rows and columns will always be the same.
         U = [[ 0. for j in range(self.nreplicas)] 
              for i in range(self.nreplicas)]

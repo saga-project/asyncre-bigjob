@@ -11,7 +11,7 @@ import commands
 import shutil
 
 import amberio.ambertools as at
-from amberio.mdin import read_amber_mdin
+from amberio.mdin import read_amber_mdin,AmberNamelist
 from amberio.rstr import read_amber_restraint
 
 __author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
@@ -178,7 +178,7 @@ class AmberRun(object):
         self.rstr = None
         if self.has_restraints: # Use info from the mdin file.
             try:
-                self.add_restraints(self.mdin.namelist_value('DISANG',None))
+                self.add_restraints(self.mdin.nmr_vars['DISANG'])
             except TypeError:
                 print ('WARNING! nmropt > 0, but no DISANG input provided. A '
                        'restraint object was not initialized.')
@@ -197,7 +197,7 @@ class AmberRun(object):
             self.filenames['mdout'] = basename + '.out'
             self.filenames['restrt'] = basename + '.rst7'
             # Trajectory output format (ASCII or NetCDF)
-            if self.mdin.namelist_value('ioutfm','cntrl') == 1:
+            if self.mdin.cntrl['ioutfm'] == 1:
                 self.filenames['mdcrd'] = basename + '.nc'
             else:
                 self.filenames['mdcrd'] = basename + '.crd'
@@ -205,17 +205,18 @@ class AmberRun(object):
 
     def __getattribute__(self, name):
         if name == 'has_refc':
-            mdin = object.__getattribute__(self,'mdin')
-            return (mdin.namelist_value('ntr','cntrl') != 0)
+            return (self.mdin.cntrl['ntr'] != 0)
+#            mdin = object.__getattribute__(self,'mdin')
+#            return (object.__getattribute__(self,'mdin').cntrl['ntr'] != 0)
         elif name == 'has_restraints':
             mdin = object.__getattribute__(self,'mdin')
-            return (mdin.namelist_value('nmropt','cntrl') != 0)
+            return (mdin.cntrl['nmropt'] != 0)
         elif name == 'restrt_is_binary':
             mdin = object.__getattribute__(self,'mdin')
-            return (mdin.namelist_value('ntxo','cntrl') != 1)
+            return (mdin.cntrl['ntxo'] != 1)
         elif name == 'mdcrd_is_binary':
             mdin = object.__getattribute__(self,'mdin')
-            return (mdin.namelist_value('ioutfm','cntrl') != 0)
+            return (mdin.cntrl['ioutfm'] != 0)
         elif name == 'arguments':
             args = [object.__getattribute__(self,'mode')]
             for file,filename in \
@@ -229,35 +230,37 @@ class AmberRun(object):
     def restart(self, is_restart=True):
         """Change whether or not this run is a restart."""
         if is_restart:
-            self.mdin.set_namelist_value('irest',1,'cntrl')
-            self.mdin.set_namelist_value('ntx',5,'cntrl')
+            self.mdin.cntrl['irest'] = 1
+            self.mdin.cntrl['ntx'] = 5
         else:
-            self.mdin.set_namelist_value('irest',0,'cntrl')
+            self.mdin.cntrl['irest'] = 0
 
     def binary_formatting(self, is_binary=True):
         """Change whether or not this run uses netCDF formats."""
         if is_binary:
-            self.mdin.set_namelist_value('ntxo',2,'cntrl')
-            self.mdin.set_namelist_value('ioutfm',1,'cntrl')
+            self.mdin.cntrl['ntxo'] = 2
+            self.mdin.cntrl['ioutfm'] = 1
         else:
-            self.mdin.set_namelist_value('ntxo',1,'cntrl')
-            self.mdin.set_namelist_value('ioutfm',0,'cntrl')
-
+            self.mdin.cntrl['ntxo'] = 1
+            self.mdin.cntrl['ioutfm'] = 0
+           
     def add_restraints(self, rstr_file, trace_file=None, print_step=None):
-        """Add or modify restraints."""
-        # Set the &cntrl namelist to read nmr options.
-        self.mdin.set_namelist_value('nmropt',1,'cntrl')
-        # Add a &wt section with restraint output options.
-        self.mdin.set_namelist_value('type',"'DUMPFREQ'",'wt',"'type'")
+        """
+        Add or modify restraints:
+        
+        (1) Set the &cntrl namelist to read nmr options.
+        (2) Add a &wt section with restraint output options (if needed).
+        (3) Add nmr variables (DUMPAVE is optional).
+        (4) Construct an AmberRestraint object with the restraint info.
+        """
+        if self.mdin.cntrl['nmropt'] == 0:
+            self.mdin.cntrl['nmropt'] = 1
         if print_step is not None:
-            self.mdin.set_namelist_value('istep1',print_step,'wt',"'DUMPFREQ'")
-        self.mdin.set_namelist_value('type',"'END'",'wt',"'type'")
-        # Add nmr variables that don't belong to a namelist.
-        self.mdin.set_namelist_value('DISANG',rstr_file,None)
+            self.mdin.wts.first_type_match("'DUMPFREQ'")['istep1'] = print_step
+        self.mdin.nmr_vars['DISANG'] = rstr_file
         if trace_file is not None:
-            self.mdin.set_namelist_value('DUMPAVE',trace_file,None)
-        self.mdin.set_namelist_value('LISTIN','POUT',None)
-        # Construct an AmberRestraint object containing the restraint info.
+            self.mdin.nmr_vars['DUMPAVE'] = trace_file
+        self.mdin.nmr_vars['LISTIN'] = 'POUT'
         self.rstr = read_amber_restraint(rstr_file)
 
     def write_amber_mdin(self, outfile=None, mode='w'):
@@ -269,7 +272,7 @@ class AmberRun(object):
     def write_amber_restraint_file(self, outfile=None, title='', mode='w'):
         """Write a new restraint file. Default overwrites current file."""
         if outfile is None:
-            outfile = self.mdin.namelist_value('DISANG',None)
+            outfile = self.mdin.nmr_vars['DISANG']
         self.rstr.write_amber_restraint_file(outfile,title,mode)
 
     def snglpnt(self, inpcrd=None, disang='tmp.RST'):
@@ -280,12 +283,12 @@ class AmberRun(object):
         """
         # Create a copy of the current AmberRun and set it to a snglpnt. 
         snglpnt_run = copy.deepcopy(self)
-        snglpnt_run.mdin.set_namelist_value('imin',0,'cntrl')
-        snglpnt_run.mdin.set_namelist_value('nstlim',0,'cntrl')
-        snglpnt_run.mdin.set_namelist_value('irest',0,'cntrl')
-        snglpnt_run.mdin.set_namelist_value('ntx',5,'cntrl')
-        snglpnt_run.mdin.set_namelist_value('ntpr',1,'cntrl')
-        snglpnt_run.mdin.set_namelist_value('ntwx',0,'cntrl')
+        snglpnt_run.mdin.cntrl['imin'] = 1
+        snglpnt_run.mdin.cntrl['nstlim'] = 0
+        snglpnt_run.mdin.cntrl['irest'] = 0
+        snglpnt_run.mdin.cntrl['ntx'] = 5
+        snglpnt_run.mdin.cntrl['ntpr'] = 1
+        snglpnt_run.mdin.cntrl['ntwx'] = 0
         if inpcrd is not None:
             snglpnt_run.filenames['inpcrd'] = inpcrd
         rundir = os.getcwd()
@@ -305,7 +308,7 @@ class AmberRun(object):
             snglpnt_run.filenames['mdin'] = 'mdin'
             snglpnt_run.filenames['mdout'] = 'mdout'
             if snglpnt_run.has_restraints:
-                snglpnt_run.mdin.set_namelist_value('DISANG',disang,None)
+                snglpnt_run.mdin.nmr_vars['DISANG'] = disang
                 snglpnt_run.write_amber_restraint_file(disang)
             snglpnt_run.write_amber_mdin()
 
@@ -328,9 +331,8 @@ class AmberRun(object):
     def reduced_energy(self, inpcrd=None, energy_component='EPtot'):
         """Calculate the "reduced" energy of an AMBER coordinate file."""
         snglpnt_mdout = self.snglpnt(inpcrd)
-        if self.mdin.namelist_value('ntt','cntrl') != 0:
-            temp0 = self.mdin.namelist_value('temp0','cntrl')
-            beta = 1./(at.KB*temp0)
+        if self.mdin.cntrl['ntt'] != 0:
+            beta = 1./(at.KB*self.mdin.cntrl['temp0'])
         else:
             raise Exception('The reduced energy is undefined for constant '
                             'energy ensembles.')
@@ -339,6 +341,5 @@ class AmberRun(object):
         # pV = 0.
         # if snglpnt_mdout.data.has_key('VOLUME'):
         #     V = snglpnt_mdout.data['VOLUME'][0]
-        #     pres0 = self.mdin.namelist_value('pres0','cntrl')
-        #     pV = pres0*V
+        #     pV = self.mdin.cntrl['pres0']*V
         return beta*energy
