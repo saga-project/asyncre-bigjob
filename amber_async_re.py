@@ -104,10 +104,11 @@ class pj_amber_job(async_re_job):
         args = ['-O','-c',inpcrd,'-o',mdout,'-x',mdcrd,'-r',restrt]
 
         # Compute Unit (i.e. Job) description
-        # ['AMBERHOME=%s'%AMBERHOME,'MKL_HOME=%s'%MKL_HOME],
+        amber_env = ['AMBERHOME=%s'%at.AMBERHOME, 'MKL_HOME=%s'%at.MKL_HOME]
+        amber_env.extend(self.engine_environment)
         cpt_unit_desc = {
             'executable': self.exe,
-            'environment': [],
+            'environment': amber_env,
             'arguments': args,
             'output': stdout,
             'error': stderr,   

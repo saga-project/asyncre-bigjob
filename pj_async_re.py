@@ -143,6 +143,11 @@ class async_re_job(object):
 
         # Optional variables
         #
+        env = self.keywords.get('ENGINE_ENVIRONMENT')
+        if env is not None and env != '':
+            self.engine_environment = env.split(',')
+        else:
+            self.engine_environment = []
         # processors per node on this machine (can be auto-detected)
         if self.keywords.get('PPN') is not None: 
             self.ppn = int(self.keywords.get('PPN'))
