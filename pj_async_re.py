@@ -12,11 +12,12 @@ import os
 import sys
 import time
 import pickle
-import copy
+#import copy
 import random
-from numpy import zeros, exp, sum
+#from numpy import zeros, exp, sum
 from configobj import ConfigObj
 
+from gibbs_sampling import *
 from pilot import PilotComputeService, ComputeDataService, State
 
 __version__ = '0.2.1'
@@ -60,7 +61,7 @@ class async_re_job(object):
         self.command_file = command_file
         self.cus = {}
         self.jobname = os.path.splitext(os.path.basename(command_file))[0]
-        self._parseInputFile()
+        self.keywords = ConfigObj(self.command_file)
         self._checkInput()
         self._printStatus()
 
@@ -94,10 +95,6 @@ class async_re_job(object):
                     for k in self.replicas_waiting_to_exchange]
         else:
             return object.__getattribute__(self,name)
-
-    def _parseInputFile(self):
-        """Read keywords from a configure file."""
-        self.keywords = ConfigObj(self.command_file)
         
     def _printStatus(self):
         """Print a report of the input parameters."""
@@ -526,89 +523,18 @@ class async_re_job(object):
                     self._launchReplica(k,self.status[k]['cycle_current']))
                 self.status[k]['running_status'] = 'R'
 
-    def _weighted_choice_sub(self,weights):
-        # return a random choice from a set with weighted probabilities
-        rnd = random.random()*sum(weights)
-        for i, w in enumerate(weights):
-            rnd -= w
-            if rnd < 0:
-                return i
-                
-# _gibbs_re_j() produces a replica "j" to exchange with the given replica "i"
-# based on independent sampling from the discrete Metropolis transition matrix
-#
-# T_rs = alpha_rs min[1,exp(-du_rs)] ; r not= s
-# T_rr = 1 - sum_(s not= r) T_rs 
-#
-# where r and s are replica exchange permutations, r being the current
-# permutation and s the new permutation. alpha_rs = 0 unless permutations
-# r and s differ by a single replica swap and alpha_rs = 1/(n-1) otherwise,
-# n being the number of replicas and (n-1) is the number of permutations s
-# differing by permutation r by a single swap. du_rs is the change in
-# reduced potential energy of the replica exchange ensemble in going from
-# permutations r to permutation s (that is due to a replica swap).
-# Based on the above we have
-# du_rs = u_a(j)+u_b(i)-[u_a(i)+u_b(j)]
-# where i and j are the replica being swapped and a and b, respectively, are the 
-# states they occupy in the r permutations and b and a, respectively, those in
-# the s permutations.
-# 
-# The energies u_a(i), i=1,n and a=1,n, are assumed stored in the input matrix U[a][i].
-#
-# In general, the set of replicas across which exchanges are considered is
-# a subset of the n replicas. This list is passed in the 'replicas_waiting'
-# list. Replica i ('repl_i') is assumed to be in this list.
-#
-    def _gibbs_re_j(self, repl_i, sid_i, replicas, states, U):
-        n = len(replicas)
-        if n < 2:
-            return repl_i
-        #evaluate all i-j swap probabilities
-        ps = zeros(n)
-        du = zeros(n)
-        eu = zeros(n)
-        #
-        for j,repl_j,sid_j in zip(range(n),replicas,states):
-            du[j] = (U[sid_i][repl_j] + U[sid_j][repl_i] 
-                     - U[sid_i][repl_i] - U[sid_j][repl_j])
-        eu = exp(-du)
-        #
-        pii = 1.0
-        i = -1
-        f = 1./(float(n) - 1.)
-        for j in range(n):
-            repl_j = replicas[j]
-            if repl_j == repl_i:
-                i = j
-            else:
-                if eu[j] > 1.0:
-                    ps[j] = f
-                else:                    
-                    ps[j] = f*eu[j]
-                pii -= ps[j]
-        try:
-            ps[i] = pii
-        except IndexError:
-            _exit('gibbs_re_j(): unrecoverable error: replica %d not in the '
-                  'list of waiting replicas?'%i)
-        #index of swap replica within replicas list
-        j = self._weighted_choice_sub(ps)
-        #actual replica
-        repl_j = replicas[j]
-        return repl_j
-
     def doExchanges(self):
         """Perform exchanges among waiting replicas using Gibbs sampling."""
         # NB: asking for self.replicas_waiting_to_exchange UPDATES the list,
         # therefore this must be kept static at each repetition.
         #
-        replicas_to_exchange = copy.deepcopy(self.replicas_waiting_to_exchange)
-        states_to_exchange = copy.deepcopy(self.states_waiting_to_exchange)
-        nreplicas_exchanging = len(replicas_to_exchange)
-        if nreplicas_exchanging < 2:
+        replicas_to_exchange = self.replicas_waiting_to_exchange
+        states_to_exchange = self.states_waiting_to_exchange
+        nreplicas_to_exchange = len(replicas_to_exchange)
+        if nreplicas_to_exchange < 2:
             return 0
 
-        print 'Initiating exchanges amongst %d replicas...'%nreplicas_exchanging
+        print 'Initiating exchanges amongst %d replicas:'%nreplicas_to_exchange
         exchange_start_time = time.time()
         # backtrack cycle of waiting replicas
         for k in replicas_to_exchange:
@@ -617,19 +543,22 @@ class async_re_job(object):
         # Matrix of replica energies in each state.
         # The computeSwapMatrix() function is defined by application 
         # classes (Amber/US, Impact/BEDAM, etc.)
-        U = self._computeSwapMatrix(replicas_to_exchange,states_to_exchange)
+        swap_matrix = self._computeSwapMatrix(replicas_to_exchange,
+                                              states_to_exchange)
         # Perform an exchange for each of the n replicas, m times
         if self.nexchg_rounds >= 0:
             mreps = self.nexchg_rounds
         else:
-            mreps = nreplicas_exchanging**(-self.nexchg_rounds)
+            mreps = nreplicas_to_exchange**(-self.nexchg_rounds)
         for reps in range(mreps):
             for repl_i in replicas_to_exchange:
                 sid_i = self.status[repl_i]['stateid_current'] 
                 curr_states = [self.status[repl_j]['stateid_current'] 
                                for repl_j in replicas_to_exchange]
-                repl_j = self._gibbs_re_j(repl_i,sid_i,replicas_to_exchange,
-                                          curr_states,U)
+                repl_j = pairwise_independence_sampling(repl_i,sid_i,
+                                                        replicas_to_exchange,
+                                                        curr_states,
+                                                        swap_matrix)
                 if repl_j != repl_i:
                     #Swap state id's
                     #Note that the energy matrix does not change
@@ -638,16 +567,17 @@ class async_re_job(object):
                     self.status[repl_i]['stateid_current'] = sid_j
                     self.status[repl_j]['stateid_current'] = sid_i
 
-# Uncomment to debug Gibbs sampling: actual and computed populations of 
-# state permutations should match
-# 
-        #         self._debug_collect_state_populations(replicas_to_exchange)
-        # self._debug_validate_state_populations(replicas_to_exchange,U)
+        # Uncomment to debug Gibbs sampling: 
+        # Actual and observed populations of state permutations should match.
+        # 
+        #     self._debug_collect_state_populations(replicas_to_exchange)
+        # self._debug_validate_state_populations(replicas_to_exchange,
+        #                                        states_to_exchange,U)
 
-            # write input files
+        # Write new input files.
         for k in replicas_to_exchange:
-            # Creates new input file for the next cycle
-            # Places replica back into "W" (wait) state 
+            # Create new input files for the next cycle and place replicas back
+            # into "W" (wait) state.
             self.status[k]['cycle_current'] += 1
             self._buildInpFile(k)
             self.status[k]['running_status'] = 'W'
@@ -696,92 +626,39 @@ class async_re_job(object):
       
     def _debug_collect_state_populations(self, replicas):
         """
-        Calculate the empirically observed distribution of state 
-        permutations. Permutations not observed will NOT be counted.
+        Calculate the empirically observed distribution of state permutations. 
+        Permutations not observed will NOT be counted and will need to be
+        added later for proper comparison to the exact distribution.
         """
         try:
-            self.npermt
+            self.nperm
         except (NameError,AttributeError):
-            self.npermt = {}
-        try:
-            self.permt
-        except (NameError,AttributeError):
-            self.permt = {}
-
+            self.nperm = {}
         curr_states = [self.status[i]['stateid_current'] for i in replicas]
         curr_perm = str(zip(replicas,curr_states))
-        if self.npermt.has_key(curr_perm):
-            self.npermt[curr_perm] += 1
+        if self.nperm.has_key(curr_perm):
+            self.nperm[curr_perm] += 1
         else:
-            self.npermt[curr_perm] = 1
-            self.permt[curr_perm] = copy.copy(curr_states)
+            self.nperm[curr_perm] = 1
 
-    def _debug_validate_state_populations(self, replicas, U):
+    def _debug_validate_state_populations(self, replicas, states, U):
         """
-        Calculate the exact state distribution of all possible state
-        permutations using the calculated energies. Compare this to the 
-        empirical distribution using the Kullback-Liebler divergence:
-
-        DKL = sum_k emp_k*ln(emp_k/exact_k)
-
-        where k indexes the states and emp_k and exact_k are the empirical and
-        exact densities of state k respectively. For numerical stability, if
-        emp_k is 0 (the state is not observed) it is set to 1e-4. Although 
-        this introduces an arbitrary bias, it makes DKL always well-defined.
+        Calculate the exact state permutation distribution and compare it to
+        the observed distribution. The similarity of these distributions is
+        measured via the Kullback-Liebler divergence.
         """
-        import math
-        from itertools import permutations
-
-        # list of the currently occuplied states
-        curr_states = [self.status[i]['stateid_current'] for i in replicas]
-        # list of tuples of all possible state permutations
-        curr_perm = str(zip(replicas,curr_states))
-        print ('Swaps among replicas %s in states %s N! = %d permutations'%
-               (str(replicas),str(curr_states),math.factorial(len(replicas))))
-        emp  = []
-        exact = []
-        sumps = 0
-        ss = 0
-        for state_perm in permutations(curr_states):
-            perm = str(zip(replicas,state_perm))
-            # emperical distribution observed here
-            if self.npermt.has_key(perm):
-                emp.append(self.npermt[perm])
-                ss += self.npermt[perm]
-            else:
-                emp.append(0.)
-            # exact boltzmann weight of all permutations
-            e = 0
-            for i,j in zip(replicas,state_perm):
-                e += U[j][i]
-            p = math.exp(-e)
-            exact.append(p)
-            sumps += p
-        exact = [p/sumps for p in exact]
-        emp   = [float(p)/ss for p in emp]
-        sum1 = 0.
-        sum2 = 0.
-        DKL = 0.
-        print '%8s %9s %9s %s'%('','empirical','exact','state permutation')
+        empirical = sample_to_state_perm_distribution(self.nperm,replicas,
+                                                      states)
+        exact = state_perm_distribution(replicas,states,U)
+        print '%8s %-9s %-9s %-s'%('','empirical','exact','state permutation')
         print '-'*80
-        dP = 1.e-9 # this will show up as 0 but contribute a lot to DKL
-        for k,state_perm in enumerate(permutations(curr_states)):
-            perm = str(zip(replicas,state_perm))
-            print '%8d %9.4f %9.4f %s'%(k+1,emp[k],exact[k],perm)
-            sum1 += emp[k]
-            sum2 += exact[k]
-            if emp[k] > 0.: 
-                empk = emp[k]
-            else:           
-                empk = dP
-            if exact[k] > 0.: 
-                exactk = exact[k]
-            else:             
-                exactk = dP
-            DKL += empk*math.log(empk/exactk)
+        if len(empirical.keys()) > len(exact.keys()):
+            perms = empirical.keys()
+        else:
+            perms = exact.keys()
+        for k,perm in enumerate(perms):
+            print '%8d %9.4f %9.4f %s'%(k+1,empirical[perm],exact[perm],perm)
         print '-'*80
-        print ('%8s %9.4f %9.4f (sum) Kullback-Liebler Divergence = %f'
-               %('',sum1,sum2,DKL))
+        dkl = state_perm_divergence(empirical,exact)
+        print 'Kullback-Liebler Divergence = %f'%dkl
         print '='*80
-            
-            
