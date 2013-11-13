@@ -1,6 +1,7 @@
 """Gibbs sampling routines"""
 from numpy import zeros, exp, sum, log, asarray
 from numpy.random import random as _random
+from random import choice
 from itertools import permutations
 
 def _exit(message):
@@ -20,6 +21,41 @@ def weighted_choice(choices):
     # You should never get here.
     return None
 
+def pairwise_metropolis_sampling(repl_i, sid_i, replicas, states, U):
+    """
+    Return a replica "j" to exchange with the given replica "i" based on
+    the Metropolis criterion:
+
+    P(i<->j) = min{1, exp(-du_ij)};
+
+    du_ij = u_a(x_j) + u_b(x_i) - u_a(x_i) - u_b(x_j),
+
+    where i and j currently occupy states a and b respectively. Repeating this
+    MANY times (perhaps N^3 - N^5, N = # of replicas) will construct a 
+    Markov chain that will eventually approach the same distribution obtained
+    by directly sampling the distribution of all replica/state permutations.
+    """
+    # Choose another replica other than repl_i.
+    #
+    nreplicas = len(replicas)
+    repl_j = repl_i
+    while repl_j == repl_i:
+        j = choice(range(nreplicas))
+        repl_j = replicas[j]
+        sid_j = states[j]
+    # Apply the Metropolis acceptance criteria. If the move is accepted, return
+    # this replica, otherwise return the same replica (no exchange).
+    #
+    du = (U[sid_i][repl_j] + U[sid_j][repl_i]
+          - U[sid_i][repl_i] - U[sid_j][repl_j])
+    if du > 0.:
+        if _random() > exp(-du):
+            return repl_i
+        else:
+            return repl_j
+    else:
+        return repl_j
+    
 def pairwise_independence_sampling(repl_i, sid_i, replicas, states, U):
     """
     Return a replica "j" to exchange with the given replica "i" based on
@@ -48,13 +84,9 @@ def pairwise_independence_sampling(repl_i, sid_i, replicas, states, U):
     subset of the n replicas. This list is passed in the 'replicas' list. 
     Replica "i" ('repl_i') is assumed to be in this list.
     """
+    # Evaluate all i-j swap probabilities.
+    #
     nreplicas = len(replicas)
-    # Save time if no exchange is possible.
-    #
-    if nreplicas < 2:
-        return repl_i
-    # otherwise, evaluate all i-j swap probabilities.
-    #
     ps = zeros(nreplicas) # probability of swap i <-> j
     du = zeros(nreplicas) # Boltzmann exponent, ps ~ exp(-du)
     for j,repl_j,sid_j in zip(range(nreplicas),replicas,states):

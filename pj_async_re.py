@@ -12,9 +12,8 @@ import os
 import sys
 import time
 import pickle
-#import copy
 import random
-#from numpy import zeros, exp, sum
+
 from configobj import ConfigObj
 
 from gibbs_sampling import *
@@ -559,6 +558,10 @@ class async_re_job(object):
                                                         replicas_to_exchange,
                                                         curr_states,
                                                         swap_matrix)
+                # repl_j = pairwise_metropolis_sampling(repl_i,sid_i,
+                #                                       replicas_to_exchange,
+                #                                       curr_states,
+                #                                       swap_matrix)
                 if repl_j != repl_i:
                     #Swap state id's
                     #Note that the energy matrix does not change
