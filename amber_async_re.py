@@ -1,5 +1,5 @@
 import os
-from configobj import ConfigObj
+#from configobj import ConfigObj
 
 import amberio.ambertools as at
 from amberio.amberrun import read_amber_groupfile, amberrun_from_files
@@ -42,8 +42,7 @@ class pj_amber_job(async_re_job):
                       'compiled and in AMBERHOME/bin?')
       
         self.exe = os.path.join(at.AMBERHOME,'bin',engine)
-        self.states = amber_states_from_configobj(self.command_file,
-                                                  self.verbose)
+        self.states = amber_states_from_configobj(self.keywords,self.verbose)
         self.nreplicas = len(self.states)
 
     def _buildInpFile(self, repl, state = None):
@@ -143,27 +142,10 @@ class pj_amber_job(async_re_job):
         rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
         return at.rst7(rst).coords
 
-    def _state_params_are_same(self, variable, namelist):
-        """
-        Return false if any two states have different values of a 
-        variable in the specified namelist. If all states have the same 
-        value, then return that value.
 
-        This routine can be useful if a particular exchange protocol 
-        assumes that certain state parameters (e.g. temperature) are the
-        same in all states.
-        """
-        value = self.states[0].mdin.__getattribute__(namelist)[variable]
-        for state in self.states[1:]:
-            this_value = state.mdin.__getattribute__(namelist)[variable]
-            if this_value != value: 
-                return False
-        return value
-
-
-def amber_states_from_configobj(command_file, verbose=False):
+def amber_states_from_configobj(keywords, verbose=False):
     """Return an AmberRunCollection from an ASyncRE command file."""
-    keywords = ConfigObj(command_file)
+    # keywords = ConfigObj(command_file)
     try:
         engine = keywords.get('ENGINE').upper()
         engine = SUPPORTED_AMBER_ENGINES[engine]

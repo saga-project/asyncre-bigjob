@@ -11,7 +11,7 @@ import commands
 import shutil
 
 import amberio.ambertools as at
-from amberio.mdin import read_amber_mdin,AmberNamelist
+from amberio.mdin import read_amber_mdin
 from amberio.rstr import read_amber_restraint
 
 __author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
@@ -128,6 +128,23 @@ class AmberRunCollection(list):
             outfile.write('%s\n'%' '.join(run.arguments))
         if closeafter:
             outfile.close()
+
+    def state_params_are_same(self, namelist, variable):
+        """
+        Return false if any two states have different values of a variable in 
+        the specified namelist. If all states have the same value, then return 
+        that value.
+
+        This routine can be useful if, for example, a particular replica 
+        exchange protocol assumes that certain state parameters (e.g. 
+        temperature) are the same in all states.
+        """
+        value = self[0].mdin.__getattribute__(namelist)[variable]
+        for state in self[1:]:
+            this_value = state.mdin.__getattribute__(namelist)[variable]
+            if this_value != value:
+                return False
+        return value
 
 def parse_amber_args(args, engine='sander'):
     """Parse AMBER command line arguments and return an AmberRun object."""

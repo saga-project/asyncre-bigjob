@@ -51,6 +51,53 @@ def _parse_bias_file(bias_filename):
             force_constants.append([float(k0) for k0 in tokens[1::2]])
     return bias_positions,force_constants
 
+def setup_us_states_from_configobj(states, keywords, verbose=False):
+    """
+    Augment a set of AMBER states to include umbrella sampling state
+    information (i.e. restraint information) from a ConfigObj.
+    """
+    # Umbrella Sampling Parameters
+    #
+    nreplicas = len(states)
+    bias_filename = keywords.get('BIAS_FILE')
+    if bias_filename is not None:
+        try:
+            bias_positions,force_constants = _parse_bias_file(bias_filename)
+        except IOError:
+            _exit('Problem reading BIAS_FILE = %s'%bias_filename)
+    elif (keywords.get('FORCE_CONSTANTS') is not None
+          and keywords.get('BIAS_POSITIONS') is not None):
+        force_constants = _parse_state_params(
+            keywords.get('FORCE_CONSTANTS'))
+        bias_positions = _parse_state_params(
+            keywords.get('BIAS_POSITIONS'))
+    else:
+        _exit('No bias specifications! Either BIAS_FILE or BIAS_POSITIONS and '
+              'FORCE_CONSTANTS must be specified.')
+
+    if len(bias_positions) != len(force_constants):
+        _exit('Number of FORCE_CONSTANTS not equal to number of BIAS_POSITIONS')
+    if (len(bias_positions) != nreplicas
+        or len(force_constants) != nreplicas):
+        _exit('Expected %d umbrella parameter sets, but instead found %d '
+              'FORCE_CONSTANTS and %d BIAS_POSITIONS'
+              %(nreplicas,len(force_constants),len(bias_positions)))    
+
+    # Look for a restraint template (try the basename?)
+    basename = keywords.get('ENGINE_INPUT_BASENAME')
+    if keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
+        restraint_template = '%s.RST'%basename
+    else:
+        restraint_template = keywords.get('AMBER_RESTRAINT_TEMPLATE')
+    if verbose:
+        print 'Using restraint template file: %s'%restraint_template
+
+    # Read the restraint template and then modify the restraint objects. 
+    for n,state in enumerate(states):
+        state.add_restraints(restraint_template)
+        state.mdin.nmr_vars['DISANG'] = DISANG_NAME
+        state.rstr.set_restraint_params(r0=bias_positions[n],
+                                        k0=force_constants[n])
 
 class amberus_async_re_job(pj_amber_job):
 
@@ -60,55 +107,15 @@ class amberus_async_re_job(pj_amber_job):
         # energies calculated in this module do not account for replicas 
         # running at different temperatures.
         #
-        temp0 = self._state_params_are_same('temp0','cntrl')
+        temp0 = self.states.state_params_are_same('cntrl','temp0')
         if not temp0:
             _exit('All temperatures MUST be the same when using AMBER-US.')
         self.beta = 1./(at.KB*temp0)
 
-        
-        # Umbrella Sampling Parameters
+        # Umbrella sampling state information.
         #
-        bias_filename = self.keywords.get('BIAS_FILE')
-        if bias_filename is not None:
-            try:
-                bias_positions,force_constants = \
-                    _parse_bias_file(bias_filename)
-            except IOError:
-                _exit('Problem reading BIAS_FILE = %s'%bias_filename)
-        elif (self.keywords.get('FORCE_CONSTANTS') is not None
-              and self.keywords.get('BIAS_POSITIONS') is not None):
-            force_constants = _parse_state_params(
-                self.keywords.get('FORCE_CONSTANTS'))
-            bias_positions = _parse_state_params(
-                self.keywords.get('BIAS_POSITIONS'))
-        else:
-            _exit('No bias specifications! Either BIAS_FILE or BIAS_POSITIONS '
-                  'and FORCE_CONSTANTS must be specified.')
-
-        if len(bias_positions) != len(force_constants):
-            _exit('Number of FORCE_CONSTANTS not equal to number of '
-                  'BIAS_POSITIONS')
-        if (len(bias_positions) != self.nreplicas 
-            or len(force_constants) != self.nreplicas):
-            _exit('Expected %d umbrella parameter sets, but instead found '
-                  '%d FORCE_CONSTANTS and %d BIAS_POSITIONS'
-                  %(self.nreplicas,len(force_constants),len(bias_positions)))
-        
-        # Look for a restraint template (try the basename?)
-        if self.keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
-            restraint_template = '%s.RST'%self.basename
-        else:
-            restraint_template = self.keywords.get('AMBER_RESTRAINT_TEMPLATE')
-        if self.verbose:
-            print 'Using restraint template file: %s'%restraint_template
-
-        # Read the restraint template and then modify the restraint objects. 
-        for n,state in enumerate(self.states):
-            state.add_restraints(restraint_template)
-            state.mdin.nmr_vars['DISANG'] = DISANG_NAME
-            state.rstr.set_restraint_params(r0=bias_positions[n],
-                                            k0=force_constants[n])
-  
+        setup_us_states_from_configobj(self.states,self.keywords,self.verbose)
+ 
     def _computeSwapMatrix(self, replicas, states):
         """
         Compute the swap matrix U = (u_ij), where u_ij = u_i(x_j)
@@ -132,20 +139,6 @@ class amberus_async_re_job(pj_amber_job):
                 u_ji = self.states[sid_j].rstr.energy(crds_i)
                 U[sid_j][repl_i] = self.beta*u_ji
         return U
-
-#    def _computeSwapMatrix(self, replicas, states):
-#        U_old = self._computeSwapMatrix_OLD(replicas,states)
-#        U_new = pj_amber_job._computeSwapMatrix(self,replicas,states)
-#        return U_new,U_old
-
-    # def _reduced_energy(self, state_i, repl_j):
-    #     """
-    #     Return the reduced energy of replica j in state i. 
-    #     NB: This is NOT the same as the current state of replica i.
-    #     """
-    #     crds_j = self._extractLastCoordinates(repl_j)
-    #     u_ij = self.states[state_i].rstr.energy(crds_j)
-    #     return self.beta*u_ij
 
     def _hasCompleted(self, repl, cyc):
         """Returns True if an umbrella sampling replica has completed a cycle.
