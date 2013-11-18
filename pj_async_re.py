@@ -92,6 +92,15 @@ class async_re_job(object):
             # ALSO completed at least one cycle.
             return [self.status[k]['stateid_current'] 
                     for k in self.replicas_waiting_to_exchange]
+        elif name == 'waiting':
+            return len(self.replicas_waiting)
+        elif name == 'replicas_running':
+            # Return a list of replica indices of replicas in a running state.
+            self.updateStatus()
+            return [k for k in range(self.nreplicas)
+                    if self.status[k]['running_status'] == 'R']
+        elif name == 'running':
+            return len(self.replicas_running)
         else:
             return object.__getattribute__(self,name)
         
@@ -389,7 +398,6 @@ class async_re_job(object):
         for k in range(self.nreplicas):
             self._updateStatus_replica(k,restart)
         self._write_status()
-        self._update_running_no()
 
     def _updateStatus_replica(self, replica, restart):
         """
@@ -418,16 +426,6 @@ class async_re_job(object):
                                'replica %d (cycle %d)'%(replica,this_cycle))
                     self._buildInpFile(replica)
                     self.status[replica]['running_status'] = 'W'
-                            
-    def _update_running_no(self):
-        """Update the number of running and waiting replicas."""
-        self.running = 0
-        self.waiting = 0
-        for k in range(self.nreplicas):
-            if self.status[k]['running_status'] == 'R':
-                self.running += 1
-            if self.status[k]['running_status'] == 'W':
-                self.waiting += 1
 
     def _isDone(self,replica,cycle):
         """
@@ -486,8 +484,6 @@ class async_re_job(object):
             subjobs_buffer_size = 0.5
         else:
             subjobs_buffer_size = float(subjobs_buffer_size)
-        # find out how many replicas are waiting/(running/submitted)
-        self._update_running_no()
         # launch new replicas if the number of submitted/running subjobs is 
         # less than the number of available slots 
         # (total_cores/subjob_cores) + 50%
@@ -584,10 +580,12 @@ class async_re_job(object):
             self.status[k]['running_status'] = 'W'
 
         total_time = time.time() - exchange_start_time
+
+        print '------------------------------------------'
         print 'Swap matrix computation time: %10.2f s'%matrix_time
         print 'Gibbs sampling time         : %10.2f s'%sampling_time
-        print '----------------------------'
-        print 'Total exchange time         : %.2f s'%total_time
+        print '------------------------------------------'
+        print 'Total exchange time         : %10.2f s'%total_time
 
 
 
