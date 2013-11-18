@@ -136,6 +136,8 @@ class amberus_async_re_job(pj_amber_job):
         cycles = [self.status[repl]['cycle_current'] for repl in replicas]
               
         nprocs = cpu_count()
+        if nprocs <= 2*len(replicas):
+            nprocs = 1
         pool = Pool(processes=nprocs)
         # Divide replicas evenly amongst processes. Add extra replicas to the
         # first few processes as needed to reach len(replicas). 
@@ -151,7 +153,7 @@ class amberus_async_re_job(pj_amber_job):
             repl_cyc_pairs.append(zip(replicas[first:last],
                                       cycles[first:last]))
 
-        print 'Setting up replica lists for %d processes...'%nprocs
+        print 'Computing swap matrix on %d processor(s)...'%nprocs
         results = [pool.apply_async(_compute_columns,
                                     args=(repl_cyc_pairs[n],states,
                                           self.command_file))
