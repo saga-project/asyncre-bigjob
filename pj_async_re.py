@@ -542,8 +542,12 @@ class async_re_job(object):
         # Matrix of replica energies in each state.
         # The computeSwapMatrix() function is defined by application 
         # classes (Amber/US, Impact/BEDAM, etc.)
+        matrix_start_time = time.time()
         swap_matrix = self._computeSwapMatrix(replicas_to_exchange,
                                               states_to_exchange)
+        matrix_time = time.time() - matrix_start_time
+
+        sampling_start_time = time.time()
         # Perform an exchange for each of the n replicas, m times
         if self.nexchg_rounds >= 0:
             mreps = self.nexchg_rounds
@@ -558,13 +562,7 @@ class async_re_job(object):
                                                         replicas_to_exchange,
                                                         curr_states,
                                                         swap_matrix)
-                # repl_j = pairwise_metropolis_sampling(repl_i,sid_i,
-                #                                       replicas_to_exchange,
-                #                                       curr_states,
-                #                                       swap_matrix)
                 if repl_j != repl_i:
-                    #Swap state id's
-                    #Note that the energy matrix does not change
                     sid_i = self.status[repl_i]['stateid_current'] 
                     sid_j = self.status[repl_j]['stateid_current']
                     self.status[repl_i]['stateid_current'] = sid_j
@@ -576,7 +574,7 @@ class async_re_job(object):
         #     self._debug_collect_state_populations(replicas_to_exchange)
         # self._debug_validate_state_populations(replicas_to_exchange,
         #                                        states_to_exchange,U)
-
+        sampling_time = time.time() - sampling_start_time
         # Write new input files.
         for k in replicas_to_exchange:
             # Create new input files for the next cycle and place replicas back
@@ -585,7 +583,12 @@ class async_re_job(object):
             self._buildInpFile(k)
             self.status[k]['running_status'] = 'W'
 
-        print 'Total exchange time = %f s'%(time.time()-exchange_start_time)
+        total_time = time.time() - exchange_start_time
+        print 'Swap matrix computation time: %10.2f s'%matrix_time
+        print 'Gibbs sampling time         : %10.2f s'%sampling_time
+        print '----------------------------'
+        print 'Total exchange time         : %.2f s'%total_time
+
 
 
 #     def _check_remote_resource(self, resource_url):
