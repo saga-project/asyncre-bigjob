@@ -1,12 +1,11 @@
 import os
-#from configobj import ConfigObj
 
 import amberio.ambertools as at
 from amberio.amberrun import read_amber_groupfile, amberrun_from_files
 from pj_async_re import async_re_job, _exit
 
 __all__ = ['pj_amber_job', 'amber_states_from_configobj',
-           'SUPPORTED_AMBER_ENGINES',
+           'extract_amber_coordinates', 'SUPPORTED_AMBER_ENGINES',
            'DISANG_NAME', 'DUMPAVE_EXT'
            ]
 
@@ -17,6 +16,20 @@ SUPPORTED_AMBER_ENGINES = {'AMBER': 'sander', 'SANDER': 'sander',
                            }
 DISANG_NAME = 'restraint.RST' # hardcoded AMBER restraint file name
 DUMPAVE_EXT = 'TRACE' # hardcoded file extension for restraint coordinates
+
+def which(program):
+    def is_exe(filename):
+        return os.path.exists(filename) and os.access(filename,os.X_OK)
+
+    path,name = os.path.split(program)
+    if path:
+        if is_exe(program):
+            return program
+    for path in os.environ['PATH'].split(os.pathsep):
+        exe = os.path.join(path,program)
+        if is_exe(exe):
+            return exe
+    return None
 
 class pj_amber_job(async_re_job):
 
@@ -102,18 +115,32 @@ class pj_amber_job(async_re_job):
 
         args = ['-O','-c',inpcrd,'-o',mdout,'-x',mdcrd,'-r',restrt]
 
-        # Compute Unit (i.e. Job) description
         amber_env = ['AMBERHOME=%s'%at.AMBERHOME, 'MKL_HOME=%s'%at.MKL_HOME]
         amber_env.extend(self.engine_environment)
+
+        script_name = 'run'
+        run_script = open('%s/%s'%(wdir,script_name),'w')
+        for env in amber_env:
+            run_script.write('export %s\n'%env)
+        run_script.write('EXE=%s\n\n'%self.exe)
+        run_script.write('cd %s\n'%wdir)
+        run_script.write('$EXE %s\n\n'%(' '.join(args)))
+        run_script.write('cd ..\n')
+        run_script.write('python calc_all_us_state_energies.py %s %s %d\n'
+                         %(self.command_file,'%s/%s'%(wdir,restrt),repl))
+        run_script.close()
+
+        # Compute Unit (i.e. Job) description
+        bash = which('bash')
         cpt_unit_desc = {
-            'executable': self.exe,
-            'environment': amber_env,
-            'arguments': args,
+            'executable': '%s %s'%(bash,script_name),
+            'environment': [],
+            'arguments': [],
             'output': stdout,
             'error': stderr,   
             'working_directory': wdir,
             'number_of_processes': int(self.keywords.get('SUBJOB_CORES')),
-            'spmd_variation': self.spmd,
+            'spmd_variation': 'single',
             }
 
         compute_unit = self.pilotcompute.submit_compute_unit(cpt_unit_desc)
@@ -142,6 +169,9 @@ class pj_amber_job(async_re_job):
         rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
         return at.rst7(rst).coords
 
+def extract_amber_coordinates(replica, cycle, basename):
+    restrt_name = 'r%d/%s_%d.rst7'%(replica,basename,cycle)
+    return at.rst7(restrt_name).coords
 
 def amber_states_from_configobj(keywords, verbose=False):
     """Return an AmberRunCollection from an ASyncRE command file."""

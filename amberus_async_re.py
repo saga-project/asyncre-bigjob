@@ -1,7 +1,12 @@
 import os
+from multiprocessing import Pool, cpu_count
+
+from configobj import ConfigObj
+from numpy import zeros, asarray
 
 import amberio.ambertools as at
-from amber_async_re import pj_amber_job, DISANG_NAME, DUMPAVE_EXT, _exit
+from amber_async_re import pj_amber_job, amber_states_from_configobj, \
+    extract_amber_coordinates, DISANG_NAME, DUMPAVE_EXT, _exit
 
 def _parse_state_params(paramline, state_delimiter=':'):
     """
@@ -119,7 +124,7 @@ class amberus_async_re_job(pj_amber_job):
     def _computeSwapMatrix(self, replicas, states):
         """
         Compute the swap matrix U = (u_ij), where u_ij = u_i(x_j)
-       
+        
         Here it is assumed that u_i(x) = beta[U_0(x) + U_i(x)], so that 
         differences of the matrix elements only involve the bias potentials U_i:
         
@@ -127,18 +132,36 @@ class amberus_async_re_job(pj_amber_job):
                      = beta[U_0(x_i) + U_i(x_i)] + beta[U_0(x_j) + U_j(x_j)]
                        - beta[U_0(x_j) + U_i(x_j)] - beta[U_0(x_i) + U_j(x_i)]
                      =  beta[U_i(x_i) + U_i(x_j) - U_i(x_j) - U_j(x_i)]
-        """
-        # U will be a sparse matrix, but is convenient bc the indices of the
-        # rows and columns will always be the same.
-        U = [[ 0. for j in range(self.nreplicas)] 
-             for i in range(self.nreplicas)]
-        for repl_i in replicas:
-            crds_i = self._extractLastCoordinates(repl_i)
-            for sid_j in states:
-                # energy of replica i in state j
-                u_ji = self.states[sid_j].rstr.energy(crds_i)
-                U[sid_j][repl_i] = self.beta*u_ji
-        return U
+        """ 
+        cycles = [self.status[repl]['cycle_current'] for repl in replicas]
+              
+        nprocs = cpu_count()
+        pool = Pool(processes=nprocs)
+        # Divide replicas evenly amongst processes. Add extra replicas to the
+        # first few processes as needed to reach len(replicas). 
+        avg_replicas_per_proc = int(len(replicas)/nprocs)
+        replicas_per_proc = [avg_replicas_per_proc for n in range(nprocs)]
+        for n in range(len(replicas)%nprocs):
+            replicas_per_proc[n] += 1
+
+        repl_cyc_pairs = []
+        for n in range(nprocs):
+            first = sum(replicas_per_proc[0:n])
+            last = first + replicas_per_proc[n]
+            repl_cyc_pairs.append(zip(replicas[first:last],
+                                      cycles[first:last]))
+
+        print 'Setting up replica lists for %d processes...'%nprocs
+        results = [pool.apply_async(_compute_columns,
+                                    args=(repl_cyc_pairs[n],states,
+                                          self.command_file))
+                   for n in range(nprocs)]
+        U = zeros([self.nreplicas,self.nreplicas])
+        for result in results:
+            U += asarray(result.get())
+        pool.close()
+        pool.join()
+        return U.tolist()
 
     def _hasCompleted(self, repl, cyc):
         """Returns True if an umbrella sampling replica has completed a cycle.
@@ -151,6 +174,23 @@ class amberus_async_re_job(pj_amber_job):
         else:
             return False
 
+def _compute_columns(replicas_and_cycles, states, command_file):
+    keywords = ConfigObj(command_file)
+    state_objs = amber_states_from_configobj(keywords)  
+    setup_us_states_from_configobj(state_objs,keywords)
+    nreplicas = len(state_objs) 
+    temp0 = state_objs.state_params_are_same('cntrl','temp0')
+    beta = 1./(at.KB*temp0)
+    basename = keywords.get('ENGINE_INPUT_BASENAME')
+
+    U = zeros([nreplicas,nreplicas])
+    for repl_i,cyc_n in replicas_and_cycles:
+        crds_i = extract_amber_coordinates(repl_i,cyc_n,basename)
+        for sid_j in states:
+            # energy of replica i in state j
+            u_ji = state_objs[sid_j].rstr.energy(crds_i)
+            U[sid_j,repl_i] = beta*u_ji
+    return U
 
 if __name__ == '__main__':
     import sys
