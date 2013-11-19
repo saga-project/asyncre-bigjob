@@ -223,17 +223,12 @@ class AmberRun(object):
     def __getattribute__(self, name):
         if name == 'has_refc':
             return (self.mdin.cntrl['ntr'] != 0)
-#            mdin = object.__getattribute__(self,'mdin')
-#            return (object.__getattribute__(self,'mdin').cntrl['ntr'] != 0)
         elif name == 'has_restraints':
-            mdin = object.__getattribute__(self,'mdin')
-            return (mdin.cntrl['nmropt'] != 0)
+            return (self.mdin.cntrl['nmropt'] != 0)
         elif name == 'restrt_is_binary':
-            mdin = object.__getattribute__(self,'mdin')
-            return (mdin.cntrl['ntxo'] != 1)
+            return (self.mdin.cntrl['ntxo'] == 2)
         elif name == 'mdcrd_is_binary':
-            mdin = object.__getattribute__(self,'mdin')
-            return (mdin.cntrl['ioutfm'] != 0)
+            return (self.mdin.cntrl['ioutfm'] == 1)
         elif name == 'arguments':
             args = [object.__getattribute__(self,'mode')]
             for file,filename in \
@@ -266,19 +261,20 @@ class AmberRun(object):
         Add or modify restraints:
         
         (1) Set the &cntrl namelist to read nmr options.
-        (2) Add a &wt section with restraint output options (if needed).
-        (3) Add nmr variables (DUMPAVE is optional).
-        (4) Construct an AmberRestraint object with the restraint info.
+        (2) Set the appropiate nmr input files.
+        (3) Add or modify wt namelists for output (optional).
+        (4) Set the appropriate nmr output files (optional).
         """
-        if self.mdin.cntrl['nmropt'] == 0:
-            self.mdin.cntrl['nmropt'] = 1
-        if print_step is not None:
-            self.mdin.wts.first_type_match("'DUMPFREQ'")['istep1'] = print_step
+        self.mdin.cntrl['nmropt'] = 1
         self.mdin.nmr_vars['DISANG'] = rstr_file
-        if trace_file is not None:
-            self.mdin.nmr_vars['DUMPAVE'] = trace_file
         self.mdin.nmr_vars['LISTIN'] = 'POUT'
         self.rstr = read_amber_restraint(rstr_file)
+
+        if print_step is not None:
+            self.mdin.modify_or_add_wt("'DUMPFREQ'",0,**{'istep1': print_step})
+        if trace_file is not None:
+            self.mdin.nmr_vars['DUMPAVE'] = trace_file
+
 
     def write_amber_mdin(self, outfile=None, mode='w'):
         """Write a new mdin file. Default overwrite currents file."""

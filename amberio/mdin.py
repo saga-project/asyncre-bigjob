@@ -115,6 +115,36 @@ class AmberMdin(object):
                 wt.engine = self.engine
             self.nmr_vars.engine = self.engine
 
+    def modify_or_add_wt(self, type, position = 0, **kwargs):
+        """
+        If a wt with the specified type exists, modify it with the keyword
+        values in kwargs. By default, the first match (position = 0) is 
+        modified. If the specified wt does not exist, it will be made; this is
+        the same as calling add_wt(-1,**kwargs).
+        """
+        wt_exists = False
+        for i,match in enumerate(self.wts.type_matches(type)):
+            if position == i:
+                wt_exists = True
+                for k,v in kwargs.iteritems():
+                    match[k] = v
+                break
+        if not wt_exists:
+            kwargs['type'] = type
+            self.add_wt(**kwargs)
+
+    def add_wt(self, type, position = -1, **kwargs):
+        """
+        Add a new wt namelist with keyword values in kwargs at the specified
+        position (default is to append). 
+
+        NB: 'position' ignores the existence of any 'END' sections and these
+        will automatically be reset after the new wt has been added.
+        """
+        kwargs['type'] = type
+        self.wts.insert(position,AmberNamelist('wt',self.engine,**kwargs))
+        self.wts.set_end()
+
     def write_amber_mdin(self, outfile, mode='w'):
         """
         Write a new mdin file with the current namelist information. For 
@@ -150,6 +180,10 @@ class AmberWtList(NamelistCollection):
         Return a generator of all wt namelists whose type matches any of the
         arguments.
         """
+        try:
+            types[0]
+        except IndexError:
+            types = [types]
         for nl in self:
             for type in types:
                 if nl['type'] == type:
@@ -451,10 +485,10 @@ if __name__ == '__main__':
     try:
         print '>>> mdin_obj = read_amber_mdin(%s)'%test_name
         mdin_obj = read_amber_mdin(test_name)
-        temp0 = AmberNamelist('wt','sander',**{'type':"'TEMP0'",'istep1': 0})
-        mdin_obj.wts.append(temp0)
-        mdin_obj.wts.first_type_match("'DUMPFREQ'")['istep1'] = 10
-        mdin_obj.wts.set_end()
+        mdin_obj.add_wt("'TEMP0'",0,**{'istep1': 0})
+        mdin_obj.modify_or_add_wt("'DUMPFREQ'",0,**{'istep1': 10})
+        mdin_obj.modify_or_add_wt("'TEMP0'",1,**{'istep1': 30000})
+
         mdin_obj.nmr_vars['DISANG'] = 'bar.RST'
         print '>>> print mdin_obj'
         print mdin_obj
