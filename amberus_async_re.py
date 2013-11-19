@@ -136,7 +136,7 @@ class amberus_async_re_job(pj_amber_job):
         cycles = [self.status[repl]['cycle_current'] for repl in replicas]
               
         nprocs = cpu_count()
-        if nprocs <= 2*len(replicas):
+        if nprocs >= 2*len(replicas):
             nprocs = 1
         pool = Pool(processes=nprocs)
         # Divide replicas evenly amongst processes. Add extra replicas to the

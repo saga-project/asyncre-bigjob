@@ -125,9 +125,9 @@ class pj_amber_job(async_re_job):
         run_script.write('EXE=%s\n\n'%self.exe)
         run_script.write('cd %s\n'%wdir)
         run_script.write('$EXE %s\n\n'%(' '.join(args)))
-        run_script.write('cd ..\n')
-        run_script.write('python calc_all_us_state_energies.py %s %s %d\n'
-                         %(self.command_file,'%s/%s'%(wdir,restrt),repl))
+        # run_script.write('cd ..\n')
+        # run_script.write('python calc_all_us_state_energies.py %s %s %d\n'
+        #                  %(self.command_file,'%s/%s'%(wdir,restrt),repl))
         run_script.close()
 
         # Compute Unit (i.e. Job) description
