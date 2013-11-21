@@ -197,9 +197,7 @@ class AmberRun(object):
             try:
                 self.add_restraints(self.mdin.nmr_vars['DISANG'])
             except TypeError:
-                print ('WARNING! nmropt > 0, but no DISANG input provided. A '
-                       'restraint object was not initialized.')
-
+                self.rstr = None
         # Additional parameters that are not filenames/objects
         #
         self.mode = mode # file writing mode

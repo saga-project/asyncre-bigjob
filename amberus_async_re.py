@@ -90,10 +90,10 @@ def setup_us_states_from_configobj(states, keywords, verbose=False):
 
     # Look for a restraint template (try the basename?)
     basename = keywords.get('ENGINE_INPUT_BASENAME')
-    if keywords.get('AMBER_RESTRAINT_TEMPLATE') is None:
-        restraint_template = '%s.RST'%basename
-    else:
+    if keywords.get('AMBER_RESTRAINT_TEMPLATE') is not None:
         restraint_template = keywords.get('AMBER_RESTRAINT_TEMPLATE')
+    else:
+        restraint_template = '%s.RST'%basename
     if verbose:
         print 'Using restraint template file: %s'%restraint_template
 
