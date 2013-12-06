@@ -1,0 +1,171 @@
+=============================================================================
+2 Dimensional Umbrella Sampling of the Backbone Torsions of Alanine Dipeptide
+=============================================================================
+
+    Alanine dipeptide is one of the simplest models that retains the essential
+features of the protein backbone and is therefore of basic interest in efforts
+to understand how proteins form secondary structure. The conformational
+space of proteins is usually described in terms of the phi/psi torsions of the
+backbone and qualitative changes in protein folding (e.g. conversion between
+alpha helices and beta sheets) can be quantitatively described using these as
+order parameters. However, the barriers to rotation along phi/psi torsions are 
+usually large compared to thermal fluctuations (on the order of ~10 kT) and
+therefore transitions are slow. In practice, one way to accelerate this
+process is to add localizing bias potentials along the torsions, thereby
+assuring that all states are sampled. The effect of the bias potentials can be
+removed later by a variety of statistical procedures. In the literature this is
+often referred to as "umbrella sampling." In the simple case of alanine 
+dipeptide there are only two torsions and therefore a complete coverage of the 
+phase space can be accomplished by biasing these two coordinates.
+
+=========================
+Description of the Inputs
+=========================
+    The inputs here are for the AMBER suite of software for molecular dynamics.
+In the language of LEaP (the AMBER program for constructing molecular systems),
+alanine dipeptide has the residue sequence "ACE-ALA-NME" (acetamide, alanine, 
+N-methyl acetamide).
+
+-------------------
+ace_ala_nme.parm7
+    An AMBER7 format parameter/topology file for alanine dipeptide solvated in 
+    a cube of 953 TIP3P rigid water molecules.
+
+-------------------
+ace_ala_nme_0.rst7
+    An AMBER7 format restart file containing coordinates, velocities, and 
+    lattice vectors for the system in a configuration representative of 300 K 
+    and 1 atm (density ~0.98 g/cm^3). For simplicity, this structure has been 
+    taken from a small amount of dynamics, rather than directly from LEaP.
+
+-------------------
+ace_ala_nme.inp 
+    An AMBER mdin file containing parameters for umbrella sampling. This is 
+    standard AMBER usage and will only be briefly described here. For a more 
+    thorough description, see the AMBER manual. Note that explicit reference to
+    restraints is not necessary, as ASyncRE will only use this file as a 
+    template for each replica. The relevant parts will be changed as necessary 
+    to describe each state/cycle.
+
+    >>>
+    MD with umbrella sampling restraints
+    &cntrl
+      irest = 1, ntx = 5,   ! read coordinates and velocities from the restart
+      nstlim = 1000, dt = 0.002, ! 1 cycle = 1000 2fs steps
+      ntpr = 1000, ! print energies at 1000 step intervals
+      ntwx = 0, ! never print coordinates, this is redundant with the restrt
+      ntwr = 0, ! only print a restart when finished
+      ioutfm = 1, ntxo = 2, iwrap = 1, ! use netCDF format and wrap coordinates 
+      ntc = 2, ntf = 2, tol = 1e-08, ! apply SHAKE constraints to bonds with H
+      ntt = 3, gamma_ln = 5.0, ig = -1, ! use Langevin dynamics
+      nmropt=1 ! look for "NMR" restraints (the bias potentials)
+    /
+    &wt 
+     type = 'DUMPFREQ', istep1 = 1000 ! print bias coordinates every 1000 steps
+    /
+    &wt 
+     type = 'END' 
+    /
+    LISTIN=POUT ! print a restraint report to mdout
+    <<<
+
+-------------------
+ace_ala_nme.RST 
+    An AMBER restraint file specifying which atoms define the phi and psi 
+    angles. Note that no specific reference values or force constants are 
+    needed, as ASyncRE will only use this as a template. The bias positiions 
+    and force constants for each state must be specified elsewhere.
+
+ace_ala_nme_amberus.biasfile
+    An ASyncRE specific file containing the harmonic bias specifications for 
+    each state. These will be read in order and assigned a number from 0 to 
+    NREPLICAS-1. Replica 0 will start in state 0 and so on (NB: this is the 
+    ONLY connection between replica 0 and state 0). The biasfile format is as 
+    follows:
+
+    >>>
+    <r00>     <k00>     <r01>     <k01>     ... <r0d>     <k0d>
+    <r10>     <k10>     <r11>     <k11>     ... <r1d>     <k1d>
+     .
+     :
+    <r(n-1)0> <k(n-1)0> <r(n-1)1> <k(n-1)1> ... <r(n-1)d> <k(n-1)d>
+    <<<
+
+    Here r is a bias position and k is a force constant. The indices n and d 
+    designate the state and dimension respectively, such that state n-1 is on 
+    line n and dimension d is given in the (2d+1)th and (2d+2)th columns. In 
+    principle, the number of states and columns is arbitrary and therefore can 
+    give rise to a very large number of entries. This format allows these to be
+    easily generated by a scripting procedure and stored for later use.
+
+    NB: The force constants are assumed to be in the same units as the bias
+    positions. This is NOT the behavior of AMBER when using angles, as bias
+    positions are taken in degrees and force constants in kcal/mol-rad^2.
+    However, as in AMBER, the factor of 1/2 in the harmonic bias is neglected.
+
+-------------------
+ace_ala_nme_amberus.config
+    This is the main ASyncRE command file and contains all of the information 
+    needed to run the simulation. A complete description of each value is in 
+    the documentation, so only the main points will be described here:
+
+    ENGINE_INPUT_BASENAME = 'ace_ala_nme'
+        - Search for input files with this basename. ASyncRE will automatically
+          discern AMBER input files based off of known file extensions. This
+          basename will also be used in naming the output files. Alternatively,
+          input files can be specified for each state by using the AMBER
+          groupfile file format (see AMBER_GROUPFILE in the documentation).
+
+    ENGINE_INPUT_EXTFILES = 'ace_ala_nme_0.rst7'
+        - All files in this field (assumed to be comma delimited) will be
+          visible to the run directory of every replica. In this case, every
+          replica will see the same restart from cycle 0 (the starting
+          structure). This can also be used for other input files, such as
+          those containing special parameters.
+
+    NREPLICAS = 300
+        - How many replicas to make. This is only necessary when not using
+          groupfiles and is expected to match the other specifications.
+
+    BIAS_FILE = 'ace_ala_nme_amberus.biasfile'
+        - Read the bias specifications from this file (see above). 
+          Alternatively, the bias specifications can be given directly in the
+          command file. However, this is really only tractable for a few states
+          and therefore not particularly convenient in general.
+
+===============
+Running ASyncRE
+===============
+    The amberus_async_re.py module file also functions as an executable script 
+for the inputs just described, taking the command file as arguments. Running
+the program is therefore as simple as:
+
+1) activate the ASyncRE python virtualenv
+>> source $HOME/.bigjob/bin/activate
+2) call the script
+>> python $ASYNCRE_DIR/amberus_async_re.py ace_ala_nme_amberus.config
+
+
+=====================
+Analyzing the Results
+=====================
+    ASyncRE treats each replica as an independent process in its own directory,
+hence the results appear as correlated sequences in the generalized ensemble
+space of all states and configurations. For energy analysis purposes this is
+not useful, as it is necessary to know with what Boltzmann weight a sample was
+drawn; this requires a knowledge of which states a replica has visited. An
+analysis script has been provided which performs this task on output
+generated by the amberus_async_re.py script:
+
+>> ASyncRE_amberus_analyze_states ace_ala_nme_amberus.config
+
+Note that this script requires the same command file input as was used to run
+the simulation and therefore is assumed to be run in the same directory. It
+will look for the presumed tree of directories and analyze the output (the
+AMBER mdout and TRACE files). The data is then dumped into two new directories
+("StateTraces" and "TracesByState" by default). The first contains a trace of
+the state index of each replica at each cycle, the second contains the trace
+of each bias coordinate in each specific state. This latter output can be used
+as input for analysis methods such as WHAM and MBAR. In fact a simple metafile
+containing each trace file and the bias specifications is also output 
+("meta.dat" by default) and is compatible with several programs in common use.

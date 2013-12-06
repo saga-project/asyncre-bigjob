@@ -223,14 +223,16 @@ class AmberRestraint(list):
         RETURN VALUES:
         energy - total restraint energy (in kcal/mol)
         """
-        energy = 0.
-        if len(crds) == len(self):
-            for rstr,r in zip(self,crds): 
-                energy += rstr.energy(r)
-        else:
-            for rstr in self: 
-                energy += rstr.energy(crds)
-        return energy
+        # energy = 0.
+        # if len(crds) == len(self):
+        #     for rstr,r in zip(self,crds): 
+        #         energy += rstr.energy(r)
+        # else:
+        #     for rstr in self: 
+        #         energy += rstr.energy(crds)
+        # return energy
+        return sum([rstr.energy(crds) for rstr in self])
+    
 
     def energy_and_gradients(self, crds):
         """
@@ -475,34 +477,34 @@ class NmroptRestraint(object):
 
         x - either Angstroms or radians
         """
-        if isinstance(crds,float) or isinstance(crds,int):
-            r = float(crds)
-            drdx = [ 0. ]
-        else:
+        try:
             r,drdx = self.coord_and_gradients(crds)
-        dedr = 0.
-        energy = 0.
+        except IndexError:
+            r,drdx = float(crds),[0.]
         # The following is the harmonic, flat-bottomed well described in the
         # AMBER manual. See the class documentation for more details.
-        if r < self._r[0]:
-            dr = self._r[0] - self._r[1]
-            dedr = 2.*self._rk[0]*dr 
-            energy = dedr*(r-self._r[0]) + self._rk[0]*dr**2
-        elif self._r[0] <= r < self._r[1]:
-            dr = r - self._r[1]
-            dedr = 2.*self._rk[0]*dr
-            energy = self._rk[0]*dr**2
-        elif self._r[1] <= r < self._r[2]:
-            dedr = 0.
-            energy = 0.
-        elif self._r[2] <= r < self._r[3]:
-            dr = r - self._r[2]
-            dedr = 2.*self._rk[1]*dr
-            energy = self._rk[1]*dr**2
-        else:
-            dr = self._r[3] - self._r[2]
-            dedr = 2.*self._rk[1]*dr
-            energy = dedr*(r-self._r[3]) + self._rk[1]*dr**2
+        # if r < self._r[0]:
+        #     dr = self._r[0] - self._r[1]
+        #     dedr = 2.*self._rk[0]*dr 
+        #     energy = dedr*(r-self._r[0]) + self._rk[0]*dr**2
+        # elif self._r[0] <= r < self._r[1]:
+        #     dr = r - self._r[1]
+        #     dedr = 2.*self._rk[0]*dr
+        #     energy = self._rk[0]*dr**2
+        # elif self._r[1] <= r < self._r[2]:
+        #     dedr = 0.
+        #     energy = 0.
+        # elif self._r[2] <= r < self._r[3]:
+        #     dr = r - self._r[2]
+        #     dedr = 2.*self._rk[1]*dr
+        #     energy = self._rk[1]*dr**2
+        # else:
+        #     dr = self._r[3] - self._r[2]
+        #     dedr = 2.*self._rk[1]*dr
+        #     energy = dedr*(r-self._r[3]) + self._rk[1]*dr**2
+        dr = r - self._r[1]
+        return self._rk[0]*dr**2,drdx
+
         # Use the chain rule to get the gradient (dE/dx) along the atomic 
         # cartesian coordinates:
         #
@@ -510,8 +512,8 @@ class NmroptRestraint(object):
         #
         # where E is the energy, r is the restraint coordinate, and x is some 
         # atomic cartesian coordinate.
-        gradients = [ dedr*drdxi for drdxi in drdx ]
-        return energy,gradients
+        # gradients = [dedr*drdxi for drdxi in drdx]
+        # return energy,gradients
 
     def print_restraint_report(self, crds=None, anames=None):
         """
@@ -619,7 +621,7 @@ class BondRestraint(NmroptRestraint):
 
         THIS IS CURRENTLY BROKEN AND RETURNS ALL GRADIENTS AS ZERO!        
         """
-        drdx = [ 0. for n in range(len(crds)) ]
+        drdx = [0. for n in range(len(crds))]
         i = self.iat[0] - 1
         j = self.iat[1] - 1
         r,drdxi,drdxj = coordinates.BondAndGradients(crds,i,j)
@@ -657,7 +659,7 @@ class AngleRestraint(NmroptRestraint):
 
         THIS IS CURRENTLY BROKEN AND RETURNS ALL GRADIENTS AS ZERO!        
         """
-        drdx = [ 0. for n in range(len(crds)) ]
+        drdx = [0. for n in range(len(crds))]
         i = self.iat[0] - 1
         j = self.iat[1] - 1
         k = self.iat[2] - 1
@@ -682,8 +684,7 @@ class TorsionRestraint(NmroptRestraint):
         return self._r[1] + 180.
 
     def coord(self, crds):
-        """Return the restrained torsion given a 3N coordinate list.
-        """
+        """Return the restrained torsion given a 3N coordinate list."""
         i = self.iat[0] - 1
         j = self.iat[1] - 1
         k = self.iat[2] - 1

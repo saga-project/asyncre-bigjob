@@ -1,79 +1,64 @@
 import os
-import sys
-import random
-import math
-import copy
 
-import numpy as np
+import amberio.ambertools as at
+from amberio.amberrun import read_amber_groupfile, amberrun_from_files
+from pj_async_re import async_re_job, _exit
 
-from pj_async_re import async_re_job
-from amberio.ambertools import AMBERHOME,KB,rst7
-from amberio.amberrun import *
-
-__all__ = ['pj_amber_job',
-           'AMBERHOME','KB',
-           'SUPPORTED_AMBER_ENGINES','DISANG_NAME','DUMPAVE_EXT']
+__all__ = ['pj_amber_job', 'amber_states_from_configobj',
+           'extract_amber_coordinates', 'SUPPORTED_AMBER_ENGINES',
+           'DISANG_NAME', 'DUMPAVE_EXT'
+           ]
 
 # TODO?: Cuda
 SUPPORTED_AMBER_ENGINES = {'AMBER': 'sander', 'SANDER': 'sander', 
-                            'AMBER-SANDER': 'sander', 'PMEMD': 'pmemd', 
-                            'AMBER-PMEMD': 'pmemd'}
+                           'AMBER-SANDER': 'sander', 'PMEMD': 'pmemd', 
+                           'AMBER-PMEMD': 'pmemd'
+                           }
 DISANG_NAME = 'restraint.RST' # hardcoded AMBER restraint file name
 DUMPAVE_EXT = 'TRACE' # hardcoded file extension for restraint coordinates
+
+def which(program):
+    def is_exe(filename):
+        return os.path.exists(filename) and os.access(filename,os.X_OK)
+
+    path,name = os.path.split(program)
+    if path:
+        if is_exe(program):
+            return program
+    for path in os.environ['PATH'].split(os.pathsep):
+        exe = os.path.join(path,program)
+        if is_exe(exe):
+            return exe
+    return None
 
 class pj_amber_job(async_re_job):
 
     def _checkInput(self):
         async_re_job._checkInput(self)
-        
-        # ===========================
-        # Set up the AMBER executable
-        # ===========================
-        engine = self.keywords.get('ENGINE').upper()
-        if SUPPORTED_AMBER_ENGINES.has_key(engine):
+        try:
+            engine = self.keywords.get('ENGINE').upper()
             engine = SUPPORTED_AMBER_ENGINES[engine]
-        else:
-            self._exit('Requested ENGINE (%s) is either invalid or not '
-                       'currently supported.'%engine)
-        if self.spmd == 'mpi' or int(self.keywords.get('SUBJOB_CORES')) > 1:
-            self.spmd = 'mpi' # Always use MPI if SUBJOB_CORES > 1.
-            engine += '.MPI'
-        # Check that this file exists and is exectuable.
-        self.exe = os.path.join(AMBERHOME,'bin',engine)
-        if not os.path.exists(self.exe) or not os.access(self.exe,os.X_OK):
-            self._exit('Could not find an executable: %s\nExpected it to'
-                       ' be at %s'%(engine,self.exe))
+        except KeyError:
+            _exit('Requested ENGINE (%s) is either invalid or not '
+                  'currently supported.'%self.keywords.get('ENGINE'))
 
-        # ========================================================
-        # Set up the general state/replica information - 2 methods
-        # ========================================================
-        # (1) If present, read the AMBER groupfile and define the states,
-        if self.keywords.get('AMBER_GROUPFILE') is not None:
-            groupfile = self.keywords.get('AMBER_GROUPFILE')
-            self.states = read_amber_groupfile(groupfile,engine)
-            self.nreplicas = len(self.states)
-            if self.verbose:
-                print ('Creating %d replicas from AMBER groupfile: %s'
-                       %(self.nreplicas,groupfile))
-        # (2) otherwise assume that the states can be inferred from the
-        # extfiles and input from a specific application (e.g. umbrella 
-        # sampling).
+        if int(self.keywords.get('SUBJOB_CORES')) > 1:
+            self.spmd = 'mpi'
+            engine = '%s.MPI'%engine
+            if not at.AMBER_MPI_EXES:
+                _exit('Cannot find AMBER MPI executables. Are these compiled '
+                      'and in AMBERHOME/bin?')
         else:
-            if self.nreplicas is None:
-                self._exit('Could not determine the replica count from the'
-                           ' input provided (set NREPLICAS directly or provide'
-                           ' an AMBER groupfile)')
-            print 'basename',self.basename
-            print 'extfiles',self.extfiles
-            print 'nreplicas',self.nreplicas
-            self.states = amberrun_from_files(self.basename,self.extfiles,
-                                              self.nreplicas,'-O',engine)
-            if self.verbose:
-                print ('Creating %d replicas using the provided'
-                       ' ENGINE_INPUT_EXTFILES and ENGINE_INPUT_BASENAME'
-                       %self.nreplicas)
+            self.spmd = 'single'
+            if not at.AMBER_SERIAL_EXES:
+                _exit('Cannot find AMBER serial executables. Are these '
+                      'compiled and in AMBERHOME/bin?')
+      
+        self.exe = os.path.join(at.AMBERHOME,'bin',engine)
+        self.states = amber_states_from_configobj(self.keywords,self.verbose)
+        self.nreplicas = len(self.states)
 
-    def _buildInpFile(self, repl):
+    def _buildInpFile(self, repl, state = None):
         """
         For a given replica:
         1) determine the current state 
@@ -82,7 +67,10 @@ class pj_amber_job(async_re_job):
         4) link to a new ref file (as needed)
         5) link to the inpcrd from cycle = 0 if cycle = 1
         """
-        sid = self.status[repl]['stateid_current']
+        if state is None:
+            sid = self.status[repl]['stateid_current']
+        else:
+            sid = state
         cyc = self.status[repl]['cycle_current']
         # Make a copy of one of the existing AmberRun state templates.
         title = ' replica %d : state %d : cycle %d'%(repl,sid,cyc)
@@ -95,7 +83,7 @@ class pj_amber_job(async_re_job):
             rstr_file = 'r%d/%s'%(repl,DISANG_NAME)
             self.states[sid].rstr.write_amber_restraint_file(rstr_file,title)
             trace_file = '%s_%d.%s'%(self.basename,cyc,DUMPAVE_EXT)
-            self.states[sid].mdin.set_namelist_value('DUMPAVE',trace_file,None)
+            self.states[sid].mdin.nmr_vars['DUMPAVE'] = trace_file
         self.states[sid].mdin.write_amber_mdin('r%d/mdin'%repl)
         # Links
         prmtop = self.states[sid].filenames['prmtop']
@@ -127,23 +115,40 @@ class pj_amber_job(async_re_job):
 
         args = ['-O','-c',inpcrd,'-o',mdout,'-x',mdcrd,'-r',restrt]
 
+        amber_env = ['AMBERHOME=%s'%at.AMBERHOME, 'MKL_HOME=%s'%at.MKL_HOME]
+        amber_env.extend(self.engine_environment)
+
+        script_name = 'run'
+        run_script = open('%s/%s'%(wdir,script_name),'w')
+        for env in amber_env:
+            run_script.write('export %s\n'%env)
+        run_script.write('EXE=%s\n\n'%self.exe)
+        run_script.write('cd %s\n'%wdir)
+        run_script.write('$EXE %s\n\n'%(' '.join(args)))
+        # run_script.write('cd ..\n')
+        # run_script.write('python calc_all_us_state_energies.py %s %s %d\n'
+        #                  %(self.command_file,'%s/%s'%(wdir,restrt),repl))
+        run_script.close()
+
         # Compute Unit (i.e. Job) description
+        bash = which('bash')
         cpt_unit_desc = {
-            'executable': self.exe,
-            'environment': ['AMBERHOME=%s'%AMBERHOME],
-            'arguments': args,
+            'executable': '%s %s'%(bash,script_name),
+            'environment': [],
+            'arguments': [],
             'output': stdout,
             'error': stderr,   
             'working_directory': wdir,
             'number_of_processes': int(self.keywords.get('SUBJOB_CORES')),
-            'spmd_variation': self.spmd,
+            'spmd_variation': 'single',
             }
 
         compute_unit = self.pilotcompute.submit_compute_unit(cpt_unit_desc)
         return compute_unit
         
     def _hasCompleted(self, repl, cyc):
-        """Returns True if an Amber replica has completed a cycle.
+        """
+        Return true if an AMBER replica has completed a cycle.
 
         Basically checks if the restart file exists.
         """
@@ -162,42 +167,53 @@ class pj_amber_job(async_re_job):
         """
         cyc = self.status[repl]['cycle_current']
         rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
-        return rst7(rst).coords
+        return at.rst7(rst).coords
 
-    def _state_params_are_same(self, variable, namelist):
-        """
-        Return False if any two states have different values of a 
-        variable in the specified namelist. If all states have the same 
-        value, then return that value.
+def extract_amber_coordinates(replica, cycle, basename):
+    restrt_name = 'r%d/%s_%d.rst7'%(replica,basename,cycle)
+    return at.rst7(restrt_name).coords
 
-        This routine can be useful if a particular exchange protocol 
-        assumes that certain state parameters (e.g. temperature) are the
-        same in all states.
-        """
-        value = self.states[0].mdin.namelist_value(variable,namelist)
-        for state in self.states[1:]:
-            this_value = state.mdin.namelist_value(variable,namelist)
-            if this_value != value: 
-                return False
-        return value
-
-    #
-    # CURRENTLY BROKEN!
-    #
-    def _computeSwapMatrix(self, replicas, states):
-        # U will be a sparse matrix, but is convenient bc the indices of the
-        # rows and columns will always be the same.
-        U = [[ 0. for j in range(self.nreplicas)] 
-             for i in range(self.nreplicas)]
-        for repl_i in replicas:
-            cyc = self.status[repl_i]['cycle_current']  
-            inpcrd_i = '%s/r%d/%s_%d.rst7'%(os.getcwd(),repl_i,self.basename,
-                                            cyc)
-            for sid_j in states:
-                state_dir = '%s/r%d'%(os.getcwd(),sid_j)
-                # energy of replica i in state j
-                os.chdir('r%d'%sid_j)
-                u_ji = self.states[sid_j].reduced_energy(inpcrd_i)
-                U[sid_j][repl_i] = u_ji
-                os.chdir('..')
-        return U
+def amber_states_from_configobj(keywords, verbose=False):
+    """Return an AmberRunCollection from an ASyncRE command file."""
+    # keywords = ConfigObj(command_file)
+    try:
+        engine = keywords.get('ENGINE').upper()
+        engine = SUPPORTED_AMBER_ENGINES[engine]
+    except KeyError:
+        _exit('Requested ENGINE (%s) is either invalid or not currently '
+              'supported.'%keywords.get('ENGINE'))        
+    
+    # Set up the general state/replica information - 2 methods
+    # 
+    # (1) If present, read the AMBER groupfile and define the states,
+    if keywords.get('AMBER_GROUPFILE') is not None:
+        groupfile = keywords.get('AMBER_GROUPFILE')
+        states = read_amber_groupfile(groupfile,engine)
+        if verbose:
+            print ('Created %d replicas from AMBER groupfile: %s'
+                   %(len(states),groupfile))
+    # (2) otherwise assume that the states can be inferred from the extfiles 
+    # and input from a specific application (e.g. umbrella sampling).
+    else:
+        basename = keywords.get('ENGINE_INPUT_BASENAME')
+        extfiles = keywords.get('ENGINE_INPUT_EXTFILES')
+        if extfiles is not None and extfiles != '':
+            extfiles = extfiles.split(',')
+        else:
+            extfiles = None
+        nreplicas = int(keywords.get('NREPLICAS'))
+        if nreplicas is None:
+            _exit('Could not determine the replica count from the input '
+                  'provided (set NREPLICAS directly or provide an AMBER '
+                  'groupfile)')
+        try:
+            states = amberrun_from_files(basename,extfiles,nreplicas,'-O',
+                                         engine)
+        except IOError:
+            _exit('Problem creating replicas, not enough information?')
+        if verbose:
+            print ('Created %d replicas using the provided '
+                   'ENGINE_INPUT_EXTFILES and ENGINE_INPUT_BASENAME'
+                   %nreplicas)
+    return states
+        
