@@ -41,11 +41,11 @@ Launches Impact sub-job using pilot-job
 #         }  
 
 
+#            "environment": schrod_env,
 
 	 #pilotjob: Compute Unit (i.e. Job) description
          compute_unit_description = {
             "executable": os.getcwd()+"/runimpact",
-            "environment": schrod_env,
             "arguments": [input_file],
             "total_cpu_count": int(self.keywords.get('SUBJOB_CORES')),
             "output": log_file,
