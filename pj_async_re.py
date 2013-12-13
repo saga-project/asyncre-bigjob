@@ -68,7 +68,8 @@ class async_re_job(object):
         _exit(message)
 
     def _openfile(self, name, mode, max_attempts = 100):
-        _open(name,mode,max_attempts)
+        f = _open(name,mode,max_attempts)
+        return f
 
     def __getattribute__(self, name):
         if name == 'replicas_waiting':
