@@ -25,7 +25,7 @@ from pj_async_re import __version__ as VERSION
 
 NAME = 'async_re'
 
-MODULES = 'pj_async_re', 'date_async_re', 'impact_async_re', 'bedam_async_re', 'bedamtempt_async_re', 'amber_async_re', 'amberus_async_re'
+MODULES = 'pj_async_re', 'date_async_re', 'impact_async_re', 'bedam_async_re', 'bedamtempt_async_re', 'amber_async_re', 'amberus_async_re', 'gibbs_sampling'
 
 REQUIRES = 'bliss', 'configobj', 'numpy'
 
