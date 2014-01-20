@@ -130,7 +130,7 @@ Performs exchange of lambdas for BEDAM replica exchange.
             if self.keywords.get('VERBOSE') == "yes":
                 print "Rejected %f %f" % (math.exp(-delta),csi)
 
-    def _extractLast_BindingEnergy_TotalEnergy(self,repl,cycle):
+    def _extractLast_lambda_BindingEnergy_TotalEnergy(self,repl,cycle):
         """
 Extracts binding energy from Impact output
 """
@@ -139,11 +139,12 @@ Extracts binding energy from Impact output
         nf = len(datai[0])
         nr = len(datai)
         # [nr-1]: last record
+        # [nf-1]: lambda (next to last item)
         # [nf-1]: binding energy (last item)
         #    [2]: total energy item (0 is step number and 1 is temperature)
         #
-        # (binding energy, total energy)
-        return (datai[nr-1][nf-1],datai[nr-1][2])
+        # (lambda, binding energy, total energy)
+        return (datai[nr-1][nf-1],datai[nr-1][nf-1],datai[nr-1][2])
 
     def print_status(self):
         """
@@ -166,10 +167,9 @@ watch cat BASENAME_stat.txt
         ofile.close()
 
     def _getPot(self,repl,cycle):
-        (u, etot) = self._extractLast_BindingEnergy_TotalEnergy(repl,cycle)
-        # removes lambda*u from etot to get e0
-        sid = self.status[repl]['stateid_current']
-        lmb = float(self.stateparams[sid]['lambda'])
+        (lmb, u, etot) = self._extractLast_lambda_BindingEnergy_TotalEnergy(repl,cycle)
+        # removes lambda*u from etot to get e0. Note that this is the lambda from the
+        # output file not the current lambda.
         e0 = float(etot) - lmb*float(u)
         return (e0,float(u))
 
