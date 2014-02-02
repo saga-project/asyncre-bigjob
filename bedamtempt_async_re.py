@@ -139,12 +139,12 @@ Extracts binding energy from Impact output
         nf = len(datai[0])
         nr = len(datai)
         # [nr-1]: last record
-        # [nf-1]: lambda (next to last item)
+        # [nf-2]: lambda (next to last item)
         # [nf-1]: binding energy (last item)
         #    [2]: total energy item (0 is step number and 1 is temperature)
         #
         # (lambda, binding energy, total energy)
-        return (datai[nr-1][nf-1],datai[nr-1][nf-1],datai[nr-1][2])
+        return (datai[nr-1][nf-2],datai[nr-1][nf-1],datai[nr-1][2])
 
     def print_status(self):
         """
@@ -170,7 +170,7 @@ watch cat BASENAME_stat.txt
         (lmb, u, etot) = self._extractLast_lambda_BindingEnergy_TotalEnergy(repl,cycle)
         # removes lambda*u from etot to get e0. Note that this is the lambda from the
         # output file not the current lambda.
-        e0 = float(etot) - lmb*float(u)
+        e0 = float(etot) - float(lmb)*float(u)
         return (e0,float(u))
 
     def _getPar(self,repl):
