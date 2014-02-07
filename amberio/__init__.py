@@ -2,4 +2,4 @@
 
 __author__ = 'Brian K. Radak <radakb@biomaps.rutgers.edu>'
 
-__all__ = ['ambertools','amberrun','mdin','rstr','inpcrd']
+__all__ = ['ambertools','amberrun','mdin','rstr']

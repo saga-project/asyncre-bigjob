@@ -2,7 +2,7 @@ import os
 from multiprocessing import Pool, cpu_count
 
 from configobj import ConfigObj
-from numpy import zeros, asarray
+from numpy import zeros, asarray, abs, any
 
 import amberio.ambertools as at
 from amber_async_re import pj_amber_job, amber_states_from_configobj, \
@@ -72,18 +72,15 @@ def setup_us_states_from_configobj(states, keywords, verbose=False):
             _exit('Problem reading BIAS_FILE = %s'%bias_filename)
     elif (keywords.get('FORCE_CONSTANTS') is not None
           and keywords.get('BIAS_POSITIONS') is not None):
-        force_constants = _parse_state_params(
-            keywords.get('FORCE_CONSTANTS'))
-        bias_positions = _parse_state_params(
-            keywords.get('BIAS_POSITIONS'))
+        force_constants = _parse_state_params(keywords.get('FORCE_CONSTANTS'))
+        bias_positions = _parse_state_params(keywords.get('BIAS_POSITIONS'))
     else:
         _exit('No bias specifications! Either BIAS_FILE or BIAS_POSITIONS and '
               'FORCE_CONSTANTS must be specified.')
 
     if len(bias_positions) != len(force_constants):
         _exit('Number of FORCE_CONSTANTS not equal to number of BIAS_POSITIONS')
-    if (len(bias_positions) != nreplicas
-        or len(force_constants) != nreplicas):
+    if len(bias_positions) != nreplicas or len(force_constants) != nreplicas:
         _exit('Expected %d umbrella parameter sets, but instead found %d '
               'FORCE_CONSTANTS and %d BIAS_POSITIONS'
               %(nreplicas,len(force_constants),len(bias_positions)))    
@@ -98,11 +95,19 @@ def setup_us_states_from_configobj(states, keywords, verbose=False):
         print 'Using restraint template file: %s'%restraint_template
 
     # Read the restraint template and then modify the restraint objects. 
-    for n,state in enumerate(states):
+    for state,r0,k0 in zip(states,bias_positions,force_constants):
         state.add_restraints(restraint_template)
         state.mdin.nmr_vars['DISANG'] = DISANG_NAME
-        state.rstr.set_restraint_params(r0=bias_positions[n],
-                                        k0=force_constants[n])
+        state.rstr.r0 = r0
+        # account for the possibility of additional, non-unique restraints,
+        # TODO: make this a bit cleaner?
+        if len(state.rstr) == len(force_constants):
+            d = None
+        else:
+            d = len(force_constants[0])
+        # NB: the biasfile uses AMBER units, must convert rad to deg.
+        state.rstr.k0 = k0*asarray(state.rstr.kfac)[:d] 
+
 
 class amberus_async_re_job(pj_amber_job):
 
@@ -133,36 +138,39 @@ class amberus_async_re_job(pj_amber_job):
                        - beta[U_0(x_j) + U_i(x_j)] - beta[U_0(x_i) + U_j(x_i)]
                      =  beta[U_i(x_i) + U_i(x_j) - U_i(x_j) - U_j(x_i)]
         """ 
-        cycles = [self.status[repl]['cycle_current'] for repl in replicas]
-              
+        cycles = [self.status[repl]['cycle_current'] for repl in replicas]      
         nprocs = cpu_count()
-        if nprocs >= 2*len(replicas):
-            nprocs = 1
-        pool = Pool(processes=nprocs)
-        # Divide replicas evenly amongst processes. Add extra replicas to the
-        # first few processes as needed to reach len(replicas). 
-        avg_replicas_per_proc = int(len(replicas)/nprocs)
-        replicas_per_proc = [avg_replicas_per_proc for n in range(nprocs)]
-        for n in range(len(replicas)%nprocs):
-            replicas_per_proc[n] += 1
-
-        repl_cyc_pairs = []
-        for n in range(nprocs):
-            first = sum(replicas_per_proc[0:n])
-            last = first + replicas_per_proc[n]
-            repl_cyc_pairs.append(zip(replicas[first:last],
-                                      cycles[first:last]))
-
+        while len(replicas)/nprocs <= 2: # This is arbitrary.
+            nprocs /= 2
         print 'Computing swap matrix on %d processor(s)...'%nprocs
-        results = [pool.apply_async(_compute_columns,
-                                    args=(repl_cyc_pairs[n],states,
-                                          self.command_file))
-                   for n in range(nprocs)]
-        U = zeros([self.nreplicas,self.nreplicas])
-        for result in results:
-            U += asarray(result.get())
-        pool.close()
-        pool.join()
+        if nprocs == 1:
+            U = _compute_columns(zip(replicas,cycles),states,self.command_file)
+        else:
+            # Divide the replicas evenly amongst the processes. Add extra 
+            # replicas to the first few processes as needed to reach 
+            # len(replicas). 
+            avg_replicas_per_proc = int(len(replicas)/nprocs)
+            replicas_per_proc = [avg_replicas_per_proc for n in range(nprocs)]
+            for n in range(len(replicas)%nprocs):
+                replicas_per_proc[n] += 1
+
+            repl_cyc_pairs = []
+            for n in range(nprocs):
+                first = sum(replicas_per_proc[0:n])
+                last = first + replicas_per_proc[n]
+                repl_cyc_pairs.append(zip(replicas[first:last],
+                                          cycles[first:last]))
+
+            pool = Pool(processes=nprocs)
+            results = [pool.apply_async(_compute_columns,
+                                        args=(repl_cyc_pairs[n],states,
+                                              self.command_file))
+                       for n in range(nprocs)]
+            U = zeros([self.nreplicas,self.nreplicas])
+            for result in results:
+                U += asarray(result.get())
+            pool.close()
+            pool.join()
         return U.tolist()
 
     def _hasCompleted(self, repl, cyc):
@@ -185,13 +193,21 @@ def _compute_columns(replicas_and_cycles, states, command_file):
     beta = 1./(at.KB*temp0)
     basename = keywords.get('ENGINE_INPUT_BASENAME')
 
+    k0s = asarray([s.rstr.rk2 for s in state_objs])[states]
+    x0s = asarray([s.rstr.r2 for s in state_objs])[states]
+    dimg = asarray(state_objs[0].rstr.image_dist)
+
     U = zeros([nreplicas,nreplicas])
     for repl_i,cyc_n in replicas_and_cycles:
         crds_i = extract_amber_coordinates(repl_i,cyc_n,basename)
-        for sid_j in states:
-            # energy of replica i in state j
-            u_ji = state_objs[sid_j].rstr.energy(crds_i)
-            U[sid_j,repl_i] = beta*u_ji
+        x_i = asarray(state_objs[0].rstr.coordinates(crds_i))
+        dx = x_i - x0s
+        i = abs(dx) > 0.5*dimg
+        while any(i):
+            for dxi,mask in zip(dx,i):
+                dxi[mask] -= dimg[mask]
+            i = abs(dx) > 0.5*dimg
+        U[states,repl_i] += beta*(k0s*dx**2).sum(axis=1)
     return U
 
 if __name__ == '__main__':

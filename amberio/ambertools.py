@@ -6,7 +6,7 @@ import os
 import sys
 
 __all__ = ['AMBERHOME', 'MKL_HOME',
-           'AmberMdout', 'AmberParm', 'rst7',
+           'AmberMdout', 'AmberParm', 'Rst7',
            'AMBER_SERIAL_EXES', 'AMBER_MPI_EXES', 'AMBER_CUDA_EXES',
            'KB'
            ]
@@ -29,7 +29,7 @@ else:
 #
 try:
     from mdoutanalyzer.mdout import AmberMdout
-    from chemistry.amber.readparm import AmberParm,rst7
+    from chemistry.amber.readparm import AmberParm,Rst7
 except ImportError:
     raise Exception('Could not load AMBER python libraries. These are'
                     ' only available in AmberTools12 and later.')
@@ -58,4 +58,3 @@ KB = BOLTZMANN*AVOGADRO/JPKC # in kcal/mol-K
 # from src/sander/runmd.F90:
 BARKC = 1.6604345e4*4.184    # converts kcal/mol to bar?
 
-__all__ = ['AMBERHOME','MKL_HOME','KB','AmberMdout','AmberParm','rst7']

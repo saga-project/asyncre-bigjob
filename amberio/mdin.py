@@ -1,10 +1,9 @@
 """
-Plugin for I/O of AMBER mdin files
+A module for I/O of AMBER mdin files
 
-This module provides a class for AMBER mdin files. AmberMdin objects
-essentially collections of Fortran namelists that also have knowledge of
-the default values expected by AMBER (depending on the MD engine being 
-used).
+This module provides a class for AMBER mdin files. AmberMdin objects are
+essentially collections of Fortran namelists that also have knowledge of the 
+default values expected by AMBER (depending on the MD engine being used).
 
 References: 
     AMBER 12 Manual: ambermd.org/doc12/Amber12.pdf
@@ -14,77 +13,114 @@ Exported Classes:
     AmberNamelist A Namelist (see the namelist module) with default 
                   values dependent on the specified MD engine.
     AmberMdin     A list of AmberNamelists
-
 """
 import sys
 
-from namelist import Namelist,NamelistCollection,separate_namelists
+from namelist import Namelist, NamelistCollection
+from amberio.ambertools import AmberMdout
 
 __author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
 
-__all__ = ['read_amber_mdin','AmberMdin','AmberNamelist']
+__all__ = ['AmberMdin', 'AmberNamelist']
 
-
-def read_amber_mdin(mdin_name, engine='sander'):
-    """Read an AMBER mdin file and return an AmberMdin object."""
-    #     Separate the namelists as a NamelistCollection and convert to a list
-    # of AmberNamelists (with assigned defaults). Parse the remaining lines for
-    # title information and NMR variables (a NoneType AmberNamelist).
-    namelists,other_lines = separate_namelists(mdin_name)
-    if namelists.first_match('cntrl') is not None:
-        cntrl = namelists.first_match('cntrl')
-    else:
-        cntrl = {}
-    if namelists.first_match('ewald') is not None:
-        ewald = namelists.first_match('ewald')
-    else:
-        ewald = {}
-    if namelists.first_match('qmmm') is not None:
-        qmmm = namelists.first_match('qmmm')
-    else:
-        qmmm = {}
-    if namelists.first_match('pb') is not None:
-        pb = namelists.first_match('pb')
-    else:
-        pb = {}
-    if namelists.first_match('debugf') is not None:
-        debugf = namelists.first_match('debugf')
-    else:
-        debugf = {}
-    wts = [m for m in namelists.matches('wt')]
-
-    title = ''
-    nmr_vars = {}
-    for line in other_lines:
-        try:
-            line = line[:line.index('!')]
-        except ValueError:
-            pass
-        tokens = line.split('=')
-        if len(tokens) > 1:
-            nmr_vars[tokens[0].strip()] = tokens[1].strip()
-        else:
-            title += line.strip() + '\n'
-    return AmberMdin(title,cntrl,ewald,qmmm,pb,debugf,wts,nmr_vars,engine)
-
-UNIQUE_NAMELISTS = ['cntrl','ewald','qmmm','pb','debugf']
 
 class AmberMdin(object):
     """
     List of AmberNamelist objects providing easy access to the data in an
     AMBER mdin file.
     """
-    def __init__(self, title='', cntrl={}, ewald={}, qmmm={}, pb={}, debugf={},
-                 wts=[], nmr_vars={}, engine='sander'):
+    def __init__(self, title='', cntrl={}, ewald={}, qmmm={}, pb={}, wts=[], 
+                 nmr_vars={}, engine='sander'):
         self.title = str(title)
         self.cntrl = AmberNamelist('cntrl',engine,**cntrl)
         self.ewald = AmberNamelist('ewald',engine,**ewald)
         self.qmmm = AmberNamelist('qmmm',engine,**qmmm)
         self.pb = AmberNamelist('pb',engine,**pb)
-        self.debugf = AmberNamelist('debugf',engine,**debugf)
         self.wts = AmberWtList(*[AmberNamelist('wt',engine,**w) for w in wts])
         self.nmr_vars = AmberNamelist(None,engine,**nmr_vars)
         self.engine = str(engine)
+
+    @classmethod
+    def from_mdin(cls, mdin_name, engine='sander'):
+        """Read an AMBER mdin file and return an AmberMdin object."""
+        #     Separate the namelists as a NamelistCollection and convert to a 
+        # list of AmberNamelists (with assigned defaults). Parse the remaining 
+        # lines for title information and NMR variables (a NoneType 
+        # AmberNamelist).
+        nls,other_lines = NamelistCollection.separate_nls(mdin_name)
+        if nls.first_match('cntrl') is not None:
+            cntrl = nls.first_match('cntrl')
+        else:
+            cntrl = {}
+        if nls.first_match('ewald') is not None:
+            ewald = nls.first_match('ewald')
+        else:
+            ewald = {}
+        if nls.first_match('qmmm') is not None:
+            qmmm = nls.first_match('qmmm')
+        else:
+            qmmm = {}
+        if nls.first_match('pb') is not None:
+            pb = nls.first_match('pb')
+        else:
+            pb = {}
+        wts = [m for m in nls.matches('wt')]
+
+        title = ''
+        nmr_vars = {}
+        for line in other_lines:
+            try:
+                line = line[:line.index('!')]
+            except ValueError:
+                pass
+            tokens = line.split('=')
+            if len(tokens) > 1:
+                nmr_vars[tokens[0].strip()] = tokens[1].strip()
+            else:
+                title += line.strip() + '\n'
+        return cls(title,cntrl,ewald,qmmm,pb,wts,nmr_vars,engine)
+
+    @classmethod
+    def from_mdout(mdout_name, engine='sander'):
+        """
+        Return an AmberMdin object from specifications in an AMBER mdout file.
+        
+        WARNING! Not all specifications are fully/properly stored in mdout 
+        files. Some information may be missing (e.g. weight changes).
+        """
+        mdout = AmberMdout(mdout_name)
+        mdin = cls(engine=engine)
+        for k,v in mdout.properties.iteritems():
+            #    The AmberMdout 'properties' attribute is just a simple dict of
+            # namelist key words and values; it does not distinguish which 
+            # namelist the pairs come from. For flexibility, AmberMdin objects 
+            # allow assignment of ANY namelist value and will raise a KeyError 
+            # only if no default value exists. In order to determine which 
+            # namelist a key word belongs to, check for a default value, if 
+            # that does not raise a KeyError, then assign the value, otherwise 
+            # move on to another namelist.
+            #
+            try:
+                mdin.cntrl[k]
+                mdin.cntrl[k] = v
+            except KeyError:
+                pass
+            try:
+                mdin.ewald[k]
+                mdin.ewald[k] = v
+            except KeyError:
+                pass
+            try:
+                mdin.qmmm[k]
+                mdin.qmmm[k] = v
+            except KeyError:
+                pass
+            try:
+                mdin.pb[k]
+                mdin.pb[k] = v
+            except KeyError:
+                pass
+        return mdin
 
     def __str__(self):
         # Format mdin file output as follows:
@@ -98,7 +134,6 @@ class AmberMdin(object):
         txt += str(self.ewald)
         txt += str(self.qmmm)
         txt += str(self.pb)
-        txt += str(self.debugf)
         txt += str(self.wts)
         txt += str(self.nmr_vars)
         return txt
@@ -110,7 +145,6 @@ class AmberMdin(object):
             self.ewald.engine = self.engine
             self.qmmm.engine = self.engine
             self.pb.engine = self.engine
-            self.debugf.engine = self.engine
             for wt in self.wts:
                 wt.engine = self.engine
             self.nmr_vars.engine = self.engine
@@ -145,7 +179,7 @@ class AmberMdin(object):
         self.wts.insert(position,AmberNamelist('wt',self.engine,**kwargs))
         self.wts.set_end()
 
-    def write_amber_mdin(self, outfile, mode='w'):
+    def write_mdin(self, outfile, mode='w'):
         """
         Write a new mdin file with the current namelist information. For 
         clarity, any values that are set to the default will be omitted.
@@ -159,9 +193,13 @@ class AmberMdin(object):
         outfile.write(str(self))
         if outfile != sys.stdout:
             outfile.close()
+
      
 class AmberWtList(NamelistCollection):
-    """A list of AMBER &wt namelists.
+    """
+    A list of AMBER &wt namelists. Rather than distinguishing namelists by 
+    their name (as in a NamelistCollection), the added methods use the 'type'
+    attribute to search.
     """
     def append(self, item):
         if not isinstance(item,AmberNamelist) or item.name != 'wt':
@@ -249,13 +287,6 @@ class AmberNamelist(Namelist):
     def default(self, key):
         """Set the default variables for the MD engine (e.g. sander)."""
         sander_defaults = {
-            'debugf': {
-                'do_debugf': 0, 'dumpfrc': 0, 
-                'zerochg': 0, 'zerovdw': 0, 'zerodip': 0,
-                'do_dir': 1, 'do_rec': 1, 'do_adj': 1, 'do_self': 1, 
-                'do_bond': 1, 'do_cbond': 1, 'do_angle': 1, 'do_ephi': 1,
-                'do_xconst': 1, 'do_cap': 1
-                },
             'cntrl': {
                 'irest': 0, 'ibelly': 0, 'ntx': 1, 'ntxo': 1,
                 'ntcx': 0, 'ig': 71277, 'tempi': 0.0, 'ntb': 1, 'ntt': 0,
@@ -367,15 +398,8 @@ class AmberNamelist(Namelist):
                 'offx': 0.0, 'offy': 0.0, 'offz': 0.0,
                 'sepbuf': 4.0, 'mpopt': 0, 'lmax': 80, 'maxarcdot': 1500
                 },
-            'wt': {
-                'type': None, 'istep1': 0, 'istep2': 0, 
-                'value1': None, 'value2': None, 'iinc': None, 'imult': None,
-                'bond': None, 'angle': None, 'torsion': None, 
-                'improp': None, 'vdw': None, 'hb': None, 'elec': None,
-                'nb': None, 'attract': None, 'repulse': None, 'rstar': None
-                },
-            None: {'DISANG': None, 'DUMPAVE': 'fort.35', 'LISTIN': None, 
-                   'LISTOUT': None}
+            'wt': {'istep1': 0, 'istep2': 0},
+            None: {}
             }
             
         pmemd_defaults = {
@@ -417,15 +441,8 @@ class AmberNamelist(Namelist):
                 },
             'qmmm': {},
             'pb': {},
-            'wt': {
-                'type': None, 'istep1': 0, 'istep2': 0, 
-                'value1': None, 'value2': None, 'iinc': None, 'imult': None,
-                'bond': None, 'angle': None, 'torsion': None, 
-                'improp': None, 'vdw': None, 'hb': None, 'elec': None,
-                'nb': None, 'attract': None, 'repulse': None, 'rstar': None
-                },
-            None: {'DISANG': None, 'DUMPAVE': 'fort.35', 'LISTIN': None, 
-                   'LISTOUT': None}
+            'wt': {'istep1': 0, 'istep2': 0},
+            None: {}
             }
         if self.engine in ['sander','sander.MPI']:
             defaults = sander_defaults
@@ -483,8 +500,8 @@ if __name__ == '__main__':
     print '==================='
 
     try:
-        print '>>> mdin_obj = read_amber_mdin(%s)'%test_name
-        mdin_obj = read_amber_mdin(test_name)
+        print '>>> mdin_obj = AmberMdin.from_mdin(%s)'%test_name
+        mdin_obj = AmberMdin.from_mdin(test_name)
         mdin_obj.add_wt("'TEMP0'",0,**{'istep1': 0})
         mdin_obj.modify_or_add_wt("'DUMPFREQ'",0,**{'istep1': 10})
         mdin_obj.modify_or_add_wt("'TEMP0'",1,**{'istep1': 30000})

@@ -79,12 +79,12 @@ class pj_amber_job(async_re_job):
         if cyc > 1: 
             self.states[sid].restart()
         if self.states[sid].has_restraints:
-            rstr_title = title
             rstr_file = 'r%d/%s'%(repl,DISANG_NAME)
-            self.states[sid].rstr.write_amber_restraint_file(rstr_file,title)
+            self.states[sid].rstr.title = title
+            self.states[sid].rstr.write(rstr_file)
             trace_file = '%s_%d.%s'%(self.basename,cyc,DUMPAVE_EXT)
             self.states[sid].mdin.nmr_vars['DUMPAVE'] = trace_file
-        self.states[sid].mdin.write_amber_mdin('r%d/mdin'%repl)
+        self.states[sid].mdin.write_mdin('r%d/mdin'%repl)
         # Links
         prmtop = self.states[sid].filenames['prmtop']
         self._linkReplicaFile('prmtop',prmtop,repl)
@@ -118,29 +118,16 @@ class pj_amber_job(async_re_job):
         amber_env = ['AMBERHOME=%s'%at.AMBERHOME, 'MKL_HOME=%s'%at.MKL_HOME]
         amber_env.extend(self.engine_environment)
 
-        script_name = 'run'
-        run_script = open('%s/%s'%(wdir,script_name),'w')
-        for env in amber_env:
-            run_script.write('export %s\n'%env)
-        run_script.write('EXE=%s\n\n'%self.exe)
-        run_script.write('cd %s\n'%wdir)
-        run_script.write('$EXE %s\n\n'%(' '.join(args)))
-        # run_script.write('cd ..\n')
-        # run_script.write('python calc_all_us_state_energies.py %s %s %d\n'
-        #                  %(self.command_file,'%s/%s'%(wdir,restrt),repl))
-        run_script.close()
-
         # Compute Unit (i.e. Job) description
-        bash = which('bash')
         cpt_unit_desc = {
-            'executable': '%s %s'%(bash,script_name),
-            'environment': [],
-            'arguments': [],
+            'executable': self.exe, 
+            'environment': self.engine_environment,
+            'arguments': args,
             'output': stdout,
             'error': stderr,   
             'working_directory': wdir,
             'number_of_processes': int(self.keywords.get('SUBJOB_CORES')),
-            'spmd_variation': 'single',
+            'spmd_variation': self.spmd,
             }
 
         compute_unit = self.pilotcompute.submit_compute_unit(cpt_unit_desc)
@@ -167,11 +154,11 @@ class pj_amber_job(async_re_job):
         """
         cyc = self.status[repl]['cycle_current']
         rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
-        return at.rst7(rst).coords
+        return at.Rst7(rst).coordinates
 
 def extract_amber_coordinates(replica, cycle, basename):
     restrt_name = 'r%d/%s_%d.rst7'%(replica,basename,cycle)
-    return at.rst7(restrt_name).coords
+    return at.Rst7(restrt_name).coordinates
 
 def amber_states_from_configobj(keywords, verbose=False):
     """Return an AmberRunCollection from an ASyncRE command file."""

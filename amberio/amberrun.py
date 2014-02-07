@@ -11,8 +11,8 @@ import commands
 import shutil
 
 import amberio.ambertools as at
-from amberio.mdin import read_amber_mdin
-from amberio.rstr import read_amber_restraint
+from amberio.mdin import AmberMdin 
+from amberio.rstr import AmberRestraint
 
 __author__ = 'Brian K. Radak. (BKR) - <radakb@biomaps.rutgers.edu>'
 
@@ -183,7 +183,7 @@ class AmberRun(object):
         for file,filename in filenames.iteritems():
             self.filenames[file] = filename
         # Read mdin and construct an mdin object.
-        self.mdin = read_amber_mdin(self.filenames['mdin'],engine)
+        self.mdin = AmberMdin.from_mdin(self.filenames['mdin'],engine)
         # Check that prmtop and inpcrd files actually exist.
         if not os.path.exists(self.filenames['prmtop']):
             raise Exception('Could not find AMBER prmtop file %s.'
@@ -196,7 +196,7 @@ class AmberRun(object):
         if self.has_restraints: # Use info from the mdin file.
             try:
                 self.add_restraints(self.mdin.nmr_vars['DISANG'])
-            except TypeError:
+            except (TypeError,KeyError):
                 self.rstr = None
         # Additional parameters that are not filenames/objects
         #
@@ -266,7 +266,7 @@ class AmberRun(object):
         self.mdin.cntrl['nmropt'] = 1
         self.mdin.nmr_vars['DISANG'] = rstr_file
         self.mdin.nmr_vars['LISTIN'] = 'POUT'
-        self.rstr = read_amber_restraint(rstr_file)
+        self.rstr = AmberRestraint.from_file(rstr_file)
 
         if print_step is not None:
             self.mdin.modify_or_add_wt("'DUMPFREQ'",0,**{'istep1': print_step})
@@ -280,11 +280,12 @@ class AmberRun(object):
             outfile = self.filenames['mdin']
         self.mdin.write_amber_mdin(outfile,mode)
         
-    def write_amber_restraint_file(self, outfile=None, title='', mode='w'):
+    def write_restraint_file(self, outfile=None, title='', mode='w'):
         """Write a new restraint file. Default overwrites current file."""
         if outfile is None:
             outfile = self.mdin.nmr_vars['DISANG']
-        self.rstr.write_amber_restraint_file(outfile,title,mode)
+        self.rstr.title = title
+        self.rstr.write(outfile,mode)
 
     def snglpnt(self, inpcrd=None, disang='tmp.RST'):
         """
@@ -320,7 +321,7 @@ class AmberRun(object):
             snglpnt_run.filenames['mdout'] = 'mdout'
             if snglpnt_run.has_restraints:
                 snglpnt_run.mdin.nmr_vars['DISANG'] = disang
-                snglpnt_run.write_amber_restraint_file(disang)
+                snglpnt_run.write_restraint_file(disang)
             snglpnt_run.write_amber_mdin()
 
             cmd = '%s %s'%(snglpnt_run.engine,' '.join(snglpnt_run.arguments()))
