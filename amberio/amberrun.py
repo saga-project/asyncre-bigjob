@@ -266,7 +266,7 @@ class AmberRun(object):
         self.mdin.cntrl['nmropt'] = 1
         self.mdin.nmr_vars['DISANG'] = rstr_file
         self.mdin.nmr_vars['LISTIN'] = 'POUT'
-        self.rstr = AmberRestraint.from_file(rstr_file)
+        self.rstr = AmberRestraint.from_disang(rstr_file)
 
         if print_step is not None:
             self.mdin.modify_or_add_wt("'DUMPFREQ'",0,**{'istep1': print_step})

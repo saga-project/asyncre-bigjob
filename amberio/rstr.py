@@ -1,3 +1,5 @@
+import re
+
 from numpy import pi, asarray, inf
 
 from namelist import Namelist, NamelistCollection
@@ -10,7 +12,7 @@ class AmberRestraint(NamelistCollection):
         self.title = str(title).rstrip()
 
     @classmethod
-    def from_file(cls, filename):
+    def from_disang(cls, filename):
         """Create an AmberRestraint from a file with &rst namelists."""
         nls,lines = NamelistCollection.separate_nls(filename)
         rst = AmberRestraint(title=''.join(lines))
@@ -33,6 +35,36 @@ class AmberRestraint(NamelistCollection):
                     raise ValueError("Bad 'iat' specification in %s"%filename)
         if len(rst) < 1:
              print 'WARNING! No &rst namelists found in %s.'%filename
+        return rst
+
+    @classmethod
+    def from_mdout(cls, filename, rstwt=None):
+        params = _extract_restraint_params_from_mdout(filename)
+        rst = AmberRestraint()
+        for i,iat in enumerate(params['iat']):
+            #    Since the restraint report in mdout files does not contain 
+            # rstwt data, the only way to identify generalized distance 
+            # coordinates is to provide these a priori. If the 'rstwt' argument
+            # is not 'None', it is expected to be a sequence of rstwts. The 
+            # elements in rstwt are then assigned to the restraints in order 
+            # until the sequence is exhausted.
+            try:
+                rstwt[i][:]
+                rst.append(GenDistCoordRestraint(iat=iat,rstwt=rstwt[i]))
+                is_gendistcoord = True
+            except (TypeError,IndexError):
+                is_gendistcoord = False
+            if not is_gendistcoord:
+                if len(iat) == 2:
+                    rst.append(BondRestraint(iat=iat))
+                elif len(iat) == 3:
+                    rst.append(AngleRestraint(iat=iat))
+                elif len(iat) == 4:
+                    rst.append(TorsionRestraint(iat=iat))
+                else:
+                    raise Exception('Bad iat specification')
+            for param in ['R1','R2','R3','R4','RK2','RK3']:
+                rst[i][param.lower()] = params[param][i]
         return rst
 
     @property
@@ -98,24 +130,21 @@ class AmberRestraint(NamelistCollection):
 class NmroptRestraint(Namelist):
     def __init__(self, *args, **kwargs):
         Namelist.__init__(self,'rst',' ','=',' ',72,72,*args,**kwargs)
-        # Constructor uses AMBER units (i.e. kcal/mol-rad^2, not deg)
-        for key in ['rk2','rk3']:
-            try:
-                self[key] *= self.kfac
-            except KeyError:
-                pass
 
     def __setitem__(self, key, value):
         if key == 'k0':
             # convenience variable for harmonic potential
-            Namelist.__setitem__(self,'rk2',float(value))
-            Namelist.__setitem__(self,'rk3',float(value))
+            self['rk2'] = float(value)
+            self['rk3'] = float(value)
         elif key == 'r0':
             # convenience variable for harmonic potential
-            Namelist.__setitem__(self,'r2',float(value))
-            Namelist.__setitem__(self,'r3',float(value))
-            Namelist.__setitem__(self,'r1',self._r1_harmonic)
-            Namelist.__setitem__(self,'r4',self._r4_harmonic)
+            self['r2'] = float(value)
+            self['r3'] = float(value)
+            self['r1'] = self._r1_harmonic
+            self['r4'] = self._r4_harmonic
+        elif key in ['rk2','rk3']:
+            # some restraints use internal units (e.g. angles)
+            Namelist.__setitem__(self,key,float(value)*self.kfac)
         else:
             Namelist.__setitem__(self,key,value)
 
@@ -136,8 +165,8 @@ class NmroptRestraint(Namelist):
 
     def __str__(self):
         # Convert force constants to I/O units and list values to strings.
-        self['rk2'] /= self.kfac 
-        self['rk3'] /= self.kfac
+        self['rk2'] /= self.kfac**2
+        self['rk3'] /= self.kfac**2
         self['iat'] = ','.join([str(i) for i in self['iat']])
         try:
             self['rstwt'] = ','.join([str(i) for i in self['rstwt']])
@@ -239,7 +268,45 @@ class GenDistCoordRestraint(NmroptRestraint):
     def _r4_harmonic(self):
         return self['r2'] + 500.0
 
+def _extract_restraint_params_from_mdout(mdout_name):
+    """Extract the restraint parameters from the report in an mdout file."""
+    iat1_pattern = "(\([ 0-9]+?\))" # pattern for atom 1
+    iat1p_pattern = "(\([ 0-9]+?\))*?" # pattern for atoms 1+
+    iat_pattern = ("^.*?%s.*?%s[^\)\(]*?%s[^\)\(]*?%s[^\)\(]*$"
+                   %(iat1_pattern,iat1p_pattern,iat1p_pattern,iat1p_pattern))
+    iat_pattern_obj = re.compile(r"%s"%iat_pattern)
+
+    params = {'iat': [], 'R1': [], 'R2': [], 'R3': [], 'R4': [],
+              'RK2': [], 'RK3': []}
+    pattern = ("^R1 =(?P<R1>[ 0-9\-\+\.]+) "
+               "+R2 =(?P<R2>[ 0-9\-\+\.]+) "
+               "+R3 =(?P<R3>[ 0-9\-\+\.]+) "
+               "+R4 =(?P<R4>[ 0-9\-\+\.]+) "
+               "+RK2 =(?P<RK2>[ 0-9\-\+\.]+) "
+               "+RK3 =(?P<RK3>[ 0-9\-\+\.]+)")
+    pattern_obj = re.compile(r'%s'%pattern)
+
+    at_toadd = []
+    for line in open(mdout_name,'r'):
+        # Accumulate a list of integers between parantheses. These may or may
+        # not correspond to the atom selection of a restraint.
+        iat_match = iat_pattern_obj.search(line)
+        if iat_match is not None:
+            for iat_str in iat_match.groups():
+                if iat_str is not None:
+                    at_toadd.append(int(iat_str.strip(')').strip('(').strip()))
+        # Look for a restraint report. If one is found, the atom list DOES
+        # belong to a restraint. Append the atom list.
+        param_match = pattern_obj.search(line)
+        if param_match is not None:
+            params['iat'].append(at_toadd)
+            at_toadd = []
+            for param in params.keys():
+                if param != 'iat':
+                    params[param].append(float(param_match.group(param)))
+    return params
+
 if __name__ == '__main__':
     import sys
-    test = AmberRestraint.from_file(sys.argv[1])
+    test = AmberRestraint.from_disang(sys.argv[1])
     test.write(sys.stdout)
