@@ -144,7 +144,7 @@ class NmroptRestraint(Namelist):
             self['r4'] = self._r4_harmonic
         elif key in ['rk2','rk3']:
             # some restraints use internal units (e.g. angles)
-            Namelist.__setitem__(self,key,float(value)*self.kfac)
+            Namelist.__setitem__(self,key,float(value)) 
         else:
             Namelist.__setitem__(self,key,value)
 
@@ -164,17 +164,14 @@ class NmroptRestraint(Namelist):
         return 1.0
 
     def __str__(self):
-        # Convert force constants to I/O units and list values to strings.
-        self['rk2'] /= self.kfac**2
-        self['rk3'] /= self.kfac**2
+        # Convert list values to strings.
         self['iat'] = ','.join([str(i) for i in self['iat']])
         try:
             self['rstwt'] = ','.join([str(i) for i in self['rstwt']])
         except KeyError:
             pass
         txt = Namelist.__str__(self)
-        self['rk2'] *= self.kfac
-        self['rk3'] *= self.kfac 
+        # Convert back to lists.
         self['iat'] = [int(i) for i in self['iat'].split(',')]
         try:
             self['rstwt'] = [float(i) for i in self['rstwt'].split(',')]

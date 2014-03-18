@@ -117,7 +117,7 @@ def pairwise_independence_sampling(repl_i, sid_i, replicas, states, U):
 def state_perm_distribution(replicas, states, swap_matrix):
     """
     Return the distribution of state permutations of a set of replicas (and 
-    their states) given the "swap matrix" containing the energies of of all
+    their states) given the "swap matrix" containing the energies of all
     such permutations:
 
     p(s) = (1/Z_s) exp(-sum_i^states u_si)

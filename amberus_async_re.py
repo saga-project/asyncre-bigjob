@@ -99,14 +99,7 @@ def setup_us_states_from_configobj(states, keywords, verbose=False):
         state.add_restraints(restraint_template)
         state.mdin.nmr_vars['DISANG'] = DISANG_NAME
         state.rstr.r0 = r0
-        # account for the possibility of additional, non-unique restraints,
-        # TODO: make this a bit cleaner?
-        if len(state.rstr) == len(force_constants):
-            d = None
-        else:
-            d = len(force_constants[0])
-        # NB: the biasfile uses AMBER units, must convert rad to deg.
-        state.rstr.k0 = k0*asarray(state.rstr.kfac)[:d] 
+        state.rstr.k0 = k0
 
 
 class amberus_async_re_job(pj_amber_job):
@@ -140,8 +133,12 @@ class amberus_async_re_job(pj_amber_job):
         """ 
         cycles = [self.status[repl]['cycle_current'] for repl in replicas]      
         nprocs = cpu_count()
-        while len(replicas)/nprocs <= 2: # This is arbitrary.
-            nprocs /= 2
+        while float(len(replicas))/nprocs <= 2: # This is arbitrary.
+            if nprocs/2 > 1:
+                nprocs /= 2
+            else:
+                nprocs = 1
+                break
         print 'Computing swap matrix on %d processor(s)...'%nprocs
         if nprocs == 1:
             U = _compute_columns(zip(replicas,cycles),states,self.command_file)
@@ -194,6 +191,8 @@ def _compute_columns(replicas_and_cycles, states, command_file):
     basename = keywords.get('ENGINE_INPUT_BASENAME')
 
     k0s = asarray([s.rstr.rk2 for s in state_objs])[states]
+    kfacs = asarray([s.rstr.kfac for s in state_objs])[states]
+    k0s *= kfacs
     x0s = asarray([s.rstr.r2 for s in state_objs])[states]
     dimg = asarray(state_objs[0].rstr.image_dist)
 

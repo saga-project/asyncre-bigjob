@@ -67,32 +67,34 @@ class pj_amber_job(async_re_job):
         4) link to a new ref file (as needed)
         5) link to the inpcrd from cycle = 0 if cycle = 1
         """
+        wdir = 'r%d'%int(repl)
         if state is None:
-            sid = self.status[repl]['stateid_current']
+            sid = self.status[int(repl)]['stateid_current']
         else:
-            sid = state
-        cyc = self.status[repl]['cycle_current']
-        # Make a copy of one of the existing AmberRun state templates.
-        title = ' replica %d : state %d : cycle %d'%(repl,sid,cyc)
-        self.states[sid].mdin.title = title
+            sid = int(state)
+        cyc = self.status[int(repl)]['cycle_current']
+        title = ' replica %d : state %d : cycle %d'%(int(repl),sid,cyc)
+       
+        new_state = self.states[sid]  
+        new_state.mdin.title = title
         # Modify the template as appropriate.
         if cyc > 1: 
-            self.states[sid].restart()
-        if self.states[sid].has_restraints:
-            rstr_file = 'r%d/%s'%(repl,DISANG_NAME)
-            self.states[sid].rstr.title = title
-            self.states[sid].rstr.write(rstr_file)
+            new_state.restart()
+        if new_state.has_restraints:
+            rstr_file = '%s/%s'%(wdir,DISANG_NAME)
+            new_state.rstr.title = title
+            new_state.rstr.write(rstr_file)
             trace_file = '%s_%d.%s'%(self.basename,cyc,DUMPAVE_EXT)
-            self.states[sid].mdin.nmr_vars['DUMPAVE'] = trace_file
-        self.states[sid].mdin.write_mdin('r%d/mdin'%repl)
+            new_state.mdin.nmr_vars['DUMPAVE'] = trace_file
+        new_state.mdin.write_mdin('%s/mdin'%wdir)
         # Links
-        prmtop = self.states[sid].filenames['prmtop']
+        prmtop = new_state.filenames['prmtop']
         self._linkReplicaFile('prmtop',prmtop,repl)
-        if self.states[sid].has_refc:
-            refc = self.states[sid].filenames['ref']
+        if new_state.has_refc:
+            refc = new_state.filenames['ref']
             self._linkReplicaFile('refc',refc,repl)
         if cyc == 1:
-            inpcrd = self.states[sid].filenames['inpcrd']
+            inpcrd = new_state.filenames['inpcrd']
             self._linkReplicaFile('%s_0.rst7'%self.basename,inpcrd,repl) 
 
     def _launchReplica(self, repl, cyc):
@@ -121,7 +123,7 @@ class pj_amber_job(async_re_job):
         # Compute Unit (i.e. Job) description
         cpt_unit_desc = {
             'executable': self.exe, 
-            'environment': self.engine_environment,
+            'environment': amber_env,
             'arguments': args,
             'output': stdout,
             'error': stderr,   
