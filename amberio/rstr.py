@@ -259,7 +259,7 @@ class GenDistCoordRestraint(NmroptRestraint):
             
     @property
     def _r1_harmonic(self):
-        return 0.0
+        return self['r2'] - 500.0
 
     @property
     def _r4_harmonic(self):
