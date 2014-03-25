@@ -154,13 +154,12 @@ class pj_amber_job(async_re_job):
         Return a 3N list of coordinates from the last restart (rst7) file 
         of a given replica.
         """
-        cyc = self.status[repl]['cycle_current']
-        rst = 'r%d/%s_%d.rst7'%(repl,self.basename,cyc)
-        return at.Rst7(rst).coordinates
+        cycle = self.status[repl]['cycle_current']
+        return extract_amber_coordinates(repl,self.basename,cycle)
 
 def extract_amber_coordinates(replica, cycle, basename):
     restrt_name = 'r%d/%s_%d.rst7'%(replica,basename,cycle)
-    return at.Rst7(restrt_name).coordinates
+    return at.Rst7.open(restrt_name).coordinates
 
 def amber_states_from_configobj(keywords, verbose=False):
     """Return an AmberRunCollection from an ASyncRE command file."""

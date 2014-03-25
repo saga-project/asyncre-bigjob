@@ -9,7 +9,7 @@
   nmropt=1
  /
  &wt 
-  type = 'DUMPFREQ', istep1 = 1000 
+  type = 'DUMPFREQ', istep1 = 100 
  /
  &wt 
   type = 'END' 

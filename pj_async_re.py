@@ -74,7 +74,7 @@ class async_re_job(object):
     def __getattribute__(self, name):
         if name == 'replicas_waiting':
             # Return a list of replica indices of replicas in a wait state.
-            self.updateStatus()
+            #self.updateStatus()
             return [k for k in range(self.nreplicas) 
                     if self.status[k]['running_status'] == 'W']
         elif name == 'states_waiting':
@@ -84,7 +84,7 @@ class async_re_job(object):
         elif name == 'replicas_waiting_to_exchange':
             # Return a list of replica indices of replicas in a wait state that
             # have ALSO completed at least one cycle.
-            self.updateStatus()
+            #self.updateStatus()
             return [k for k in range(self.nreplicas) 
                     if (self.status[k]['running_status'] == 'W' and
                         self.status[k]['cycle_current'] > 1)]
@@ -97,7 +97,7 @@ class async_re_job(object):
             return len(self.replicas_waiting)
         elif name == 'replicas_running':
             # Return a list of replica indices of replicas in a running state.
-            self.updateStatus()
+            #self.updateStatus()
             return [k for k in range(self.nreplicas)
                     if self.status[k]['running_status'] == 'R']
         elif name == 'running':
@@ -524,6 +524,7 @@ class async_re_job(object):
         # NB: asking for self.replicas_waiting_to_exchange UPDATES the list,
         # therefore this must be kept static at each repetition.
         #
+        self.updateStatus()
         replicas_to_exchange = self.replicas_waiting_to_exchange
         states_to_exchange = self.states_waiting_to_exchange
         nreplicas_to_exchange = len(replicas_to_exchange)
@@ -550,6 +551,7 @@ class async_re_job(object):
             mreps = self.nexchg_rounds
         else:
             mreps = nreplicas_to_exchange**(-self.nexchg_rounds)
+        accept_count = 0
         for reps in range(mreps):
             for repl_i in replicas_to_exchange:
                 sid_i = self.status[repl_i]['stateid_current'] 
@@ -564,13 +566,14 @@ class async_re_job(object):
                     sid_j = self.status[repl_j]['stateid_current']
                     self.status[repl_i]['stateid_current'] = sid_j
                     self.status[repl_j]['stateid_current'] = sid_i
+                    accept_count += 1
 
         # Uncomment to debug Gibbs sampling: 
         # Actual and observed populations of state permutations should match.
         # 
         #     self._debug_collect_state_populations(replicas_to_exchange)
         # self._debug_validate_state_populations(replicas_to_exchange,
-        #                                        states_to_exchange,U)
+        #                                        states_to_exchange,swap_matrix)
         sampling_time = time.time() - sampling_start_time
         # Write new input files.
         for k in replicas_to_exchange:
@@ -587,7 +590,7 @@ class async_re_job(object):
         print 'Gibbs sampling time         : %10.2f s'%sampling_time
         print '------------------------------------------'
         print 'Total exchange time         : %10.2f s'%total_time
-
+        print '%d exchanges accepted'%accept_count
 
 
 #     def _check_remote_resource(self, resource_url):
