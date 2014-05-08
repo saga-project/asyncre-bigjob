@@ -36,7 +36,7 @@ class pj_amber_job(async_re_job):
     def _checkInput(self):
         async_re_job._checkInput(self)
         try:
-            engine = self.keywords.get('ENGINE').upper()
+            engine = str(self.keywords.get('ENGINE')).upper()
             engine = SUPPORTED_AMBER_ENGINES[engine]
         except KeyError:
             _exit('Requested ENGINE (%s) is either invalid or not '
@@ -45,15 +45,22 @@ class pj_amber_job(async_re_job):
         if int(self.keywords.get('SUBJOB_CORES')) > 1:
             self.spmd = 'mpi'
             engine = '%s.MPI'%engine
-            if not at.AMBER_MPI_EXES:
-                _exit('Cannot find AMBER MPI executables. Are these compiled '
-                      'and in AMBERHOME/bin?')
+            if ((engine == 'sander.MPI' and not at.SANDER_MPI_EXE)
+                or engine == 'pmemd.MPI' and not at.PMEMD_MPI_EXE):
+                no_exe = True
+            else:
+                no_exe = False
         else:
             self.spmd = 'single'
-            if not at.AMBER_SERIAL_EXES:
-                _exit('Cannot find AMBER serial executables. Are these '
-                      'compiled and in AMBERHOME/bin?')
-      
+            if ((engine == 'sander' and not at.SANDER_SERIAL_EXE)
+                or engine == 'pmemd' and not at.PMEMD_SERIAL_EXE):
+                no_exe = True
+            else:
+                no_exe = False
+        if no_exe:
+            _exit('Cannot find %s executable. Is it compiled and in '
+                  'AMBERHOME/bin?'%engine)
+
         self.exe = os.path.join(at.AMBERHOME,'bin',engine)
         self.states = amber_states_from_configobj(self.keywords,self.verbose)
         self.nreplicas = len(self.states)

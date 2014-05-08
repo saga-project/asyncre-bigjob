@@ -7,7 +7,8 @@ import sys
 
 __all__ = ['AMBERHOME', 'MKL_HOME',
            'AmberMdout', 'AmberParm', 'Rst7',
-           'AMBER_SERIAL_EXES', 'AMBER_MPI_EXES', 'AMBER_CUDA_EXES',
+           'SANDER_SERIAL_EXE', 'SANDER_MPI_EXE', 'PMEMD_SERIAL_EXE', 
+           'PMEMD_MPI_EXE', 'PMEMD_CUDA_EXES',
            'KB'
            ]
 
@@ -23,7 +24,7 @@ else:
     except:
         raise Exception('Problem adding $AMBERHOME/bin to PYTHONPATH.')
 
-# Load python libraries from Jason Swail. These are useful for file I/O of
+# Load python libraries from Jason Swails These are useful for file I/O of
 # various AMBER file formats, particularly .parm7/.prmtop, .inpcrd/.rst7 
 # (including netCDF), and mdout files.
 #
@@ -44,9 +45,11 @@ def check_engine_status(engines):
             return False
     return True
 
-AMBER_SERIAL_EXES = check_engine_status(['sander','pmemd'])
-AMBER_MPI_EXES = check_engine_status(['sander.MPI','pmemd.MPI'])
-AMBER_CUDA_EXES = check_engine_status(['pmemd.cuda','pmemd.cuda.MPI'])
+SANDER_SERIAL_EXE = check_engine_status(['sander'])
+SANDER_MPI_EXE = check_engine_status(['sander.MPI'])
+PMEMD_SERIAL_EXE = check_engine_status(['pmemd'])
+PMEMD_MPI_EXE = check_engine_status(['pmemd.MPI'])
+PMEMD_CUDA_EXE = check_engine_status(['pmemd.cuda','pmemd.cuda.MPI'])
 
 # Constants 
 #
