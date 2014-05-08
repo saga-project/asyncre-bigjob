@@ -1,0 +1,17 @@
+#-Main settings----------------------------------------------------------------
+ENGINE = 'AMBER-SANDER'
+RE_SETUP = 'YES' # for a restart, set to NO, 'stat' files will be read
+ENGINE_INPUT_BASENAME = 'ace_ala_nme'
+ENGINE_INPUT_EXTFILES = 'ace_ala_nme_0.rst7'
+VERBOSE = 'NO'
+#-RE/simulation settings-------------------------------------------------------
+NREPLICAS = 6 #576
+BIAS_FILE = 'ace_ala_nme.biasfile.small'
+REPLICA_RUN_TIME = 1 # estimated time per replica cycle in minutes
+#-BigJob settings--------------------------------------------------------------
+WALL_TIME = 5  # desired wall time in minutes
+COORDINATION_URL = 'redis://localhost'
+RESOURCE_URL = 'fork://localhost'
+TOTAL_CORES = 2
+SUBJOB_CORES = 1
+#------------------------------------------------------------------------------

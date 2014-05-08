@@ -133,7 +133,9 @@ class async_re_job(object):
         if self.keywords.get('RESOURCE_URL') is None:
             self._exit('RESOURCE_URL needs to be specified')
         if self.keywords.get('QUEUE') is None:
-            self._exit('QUEUE needs to be specified')
+            if str(self.keywords.get('RESOURCE_URL')).split(':')[0] != 'fork':
+                self._exit('QUEUE needs to be specified')
+
         if self.keywords.get('BJ_WORKING_DIR') is None:
             basedir = os.getcwd()
         else:
@@ -575,12 +577,9 @@ class async_re_job(object):
         # self._debug_validate_state_populations(replicas_to_exchange,
         #                                        states_to_exchange,swap_matrix)
         sampling_time = time.time() - sampling_start_time
-        # Write new input files.
         for k in replicas_to_exchange:
-            # Create new input files for the next cycle and place replicas back
-            # into "W" (wait) state.
+            # Place replicas back into "W" (wait) state.
             self.status[k]['cycle_current'] += 1
-            self._buildInpFile(k)
             self.status[k]['running_status'] = 'W'
 
         total_time = time.time() - exchange_start_time
